@@ -309,25 +309,155 @@ data/bird_mini_dev/processed/validation.jsonl
 
 The `data/`, `models/`, and `outputs/` folders are intentionally ignored by Git. They can contain downloaded datasets, generated training files, model artifacts, and evaluation outputs. Recreate the data files locally with the scripts above instead of committing them.
 
+## Baseline Evaluation Set
+
+The baseline evaluation set script is:
+
+```text
+scripts/create_baseline_eval_set.py
+```
+
+It creates a small, balanced sample from `validation.jsonl` so the same examples can be used before and after fine-tuning.
+
+Generated local file:
+
+```text
+outputs/baseline/baseline_eval_set.jsonl
+```
+
+This file is intentionally ignored by Git because `outputs/` is for local generated artifacts.
+
+Run it with:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\create_baseline_eval_set.py
+```
+
+Latest baseline sample:
+
+```text
+Baseline sample size: 20
+challenging: 7
+moderate: 7
+simple: 6
+```
+
 ## Next Step
 
-The next project step is to create a baseline evaluation before fine-tuning.
-
-Why:
+The baseline model runner is:
 
 ```text
-Before training, measure how well an existing model performs.
-After training, compare against that baseline.
+scripts/run_baseline_model.py
 ```
 
-This prevents us from training blindly.
-
-The next script will likely:
+It loads `outputs/baseline/baseline_eval_set.jsonl`, sends each prompt to a base model, and saves predictions to:
 
 ```text
-1. Load a small sample from validation.jsonl.
-2. Send each question to a baseline model.
-3. Collect generated SQL.
-4. Compare generated SQL against the expected SQL.
-5. Save results under outputs/.
+outputs/baseline/baseline_predictions.jsonl
 ```
+
+Default model:
+
+```text
+Qwen/Qwen2.5-Coder-0.5B-Instruct
+```
+
+Run a small smoke test first:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\run_baseline_model.py --limit 2
+```
+
+Then run all 20 baseline examples:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\run_baseline_model.py
+```
+
+This gives us a before-fine-tuning result to compare against later.
+
+Note: the current local PyTorch install is CPU-only. That is fine for a small baseline smoke test, but actual fine-tuning should use a CUDA-enabled PyTorch install.
+
+Model downloads are cached inside the project under:
+
+```text
+models/huggingface
+```
+
+The `models/` folder is ignored by Git, so downloaded base models and future fine-tuned artifacts stay local and are not pushed to GitHub.
+
+Latest baseline run:
+
+```text
+Model: Qwen/Qwen2.5-Coder-0.5B-Instruct
+Device: CPU
+Examples: 20
+Exact matches: 0/20
+```
+
+Exact string match is a very strict metric for SQL because two different SQL strings can sometimes be logically equivalent. Still, this baseline is useful because the model often guesses table names and column names. The next improvement should add database schema context to each prompt before fine-tuning.
+
+Evaluation notes and failure analysis are documented in:
+
+```text
+docs/evaluation-journal.md
+```
+
+## Schema Availability Check
+
+The schema availability script is:
+
+```text
+scripts/inspect_schema_availability.py
+```
+
+It checks whether the expected BIRD database folders are available locally under:
+
+```text
+data/bird_mini_dev/dev_databases
+```
+
+Run it with:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\inspect_schema_availability.py
+```
+
+Current status: the official package has been downloaded locally, and all 11 expected database folders are present under `data/bird_mini_dev/dev_databases`.
+
+## Schema Text Extraction
+
+The schema extraction script is:
+
+```text
+scripts/extract_schema_text.py
+```
+
+It reads each local `.sqlite` database and writes compact table/column schema text to:
+
+```text
+data/bird_mini_dev/schema/schema_text.json
+```
+
+Example schema format:
+
+```text
+atom(molecule_id, atom_id, element)
+bond(molecule_id, bond_id, bond_type)
+connected(atom_id, atom_id2, bond_id)
+molecule(molecule_id, label)
+```
+
+Run it with:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\extract_schema_text.py
+```
+
+Latest result:
+
+```text
+Extracted schemas: 11
+```
+
+Next step: inject this schema text into each training example and regenerate `training_data.jsonl`, `train.jsonl`, `validation.jsonl`, and the baseline evaluation set.
