@@ -1,462 +1,169 @@
-# Fine-Tuning A Text-to-SQL Model
+# TinySQL-coder
 
-This project is a learning-first fine-tuning project using the BIRD mini-dev dataset.
+TinySQL-coder is a learning-first text-to-SQL fine-tuning project using the
+BIRD mini-dev dataset.
 
-Important clarification: this dataset does not contain bird images. **BIRD** here refers to a text-to-SQL benchmark dataset. Each example contains a natural-language database question and the SQL query that answers it.
+Important clarification: **BIRD does not mean bird images here**. BIRD is a
+database question-answering benchmark. Each example contains a natural-language
+question, database context, and the SQL query that answers the question.
 
-The current goal is to build the data preparation foundation before training a model.
+The project goal is:
+
+```text
+database schema + question + evidence -> SQL query
+```
 
 ## Current Status
 
 Done so far:
 
-1. Created the project structure.
-2. Downloaded the BIRD mini-dev dataset.
-3. Confirmed the raw data is stored as an Arrow dataset file.
-4. Created a notebook to inspect the raw dataset.
-5. Converted the raw dataset into JSONL training examples.
-6. Added a script to inspect the generated training examples.
-7. Split the examples into training and validation sets.
+1. Downloaded and inspected the BIRD mini-dev dataset.
+2. Added the matching official SQLite database package locally.
+3. Extracted compact schema text from each SQLite database.
+4. Built processed JSONL training data with schema, question, evidence, and gold SQL.
+5. Split data into train and validation sets.
+6. Built a fixed 20-example baseline evaluation set.
+7. Ran base Qwen baseline evaluation.
+8. Added execution-based SQL evaluation against real SQLite databases.
+9. Prepared chat-style supervised fine-tuning data.
+10. Set up CUDA-enabled PyTorch.
+11. Ran a LoRA smoke test.
+12. Ran LoRA Training Run 001.
+13. Evaluated Qwen + LoRA Run 001.
+14. Added a comparison tool for base-vs-LoRA evaluation reports.
 
-Current dataset size:
+Latest high-level result:
 
 ```text
-Raw examples: 500
-Training examples: 400
-Validation examples: 100
+Base Qwen execution matches:    1/20
+LoRA Run 001 execution matches: 0/20
 ```
 
-Difficulty distribution after splitting:
-
-```text
-Train:
-  challenging: 82
-  moderate: 200
-  simple: 118
-
-Validation:
-  challenging: 20
-  moderate: 50
-  simple: 30
-```
+The training pipeline works, but the first short LoRA run did not improve SQL
+execution accuracy yet. The main failure pattern is still schema grounding:
+the model often puts a real column on the wrong table or skips a needed join.
 
 ## Project Structure
 
 ```text
 .
-+-- data/
++-- data/                         local only, ignored by Git
 |   +-- bird_mini_dev/
 |       +-- raw/
-|       |   +-- bird-original.arrow
-|       |   +-- dataset_info.json
-|       |   +-- state.json
+|       +-- dev_databases/
+|       +-- schema/
 |       +-- processed/
-|           +-- training_data.jsonl
-|           +-- train.jsonl
-|           +-- validation.jsonl
-+-- models/
+|       +-- sft/
++-- docs/                         experiment journals and notes
++-- models/                       local only, ignored by Git
+|   +-- huggingface/
+|   +-- lora-smoke-test/
+|   +-- tinysql-coder-lora-run-001/
 +-- notebooks/
 |   +-- 001-data-exploration.ipynb
-+-- outputs/
+|   +-- 002-inspect-qwen-model.ipynb
++-- outputs/                      generated eval outputs, ignored by Git
 +-- scripts/
 |   +-- download-dataset.py
+|   +-- extract_schema_text.py
 |   +-- prepare_training_data.py
-|   +-- inspect_training_data.py
 |   +-- split_training_data.py
+|   +-- prepare_sft_data.py
+|   +-- create_baseline_eval_set.py
+|   +-- run_baseline_model.py
+|   +-- evaluate_sql_execution.py
+|   +-- compare_eval_runs.py
+|   +-- check_training_readiness.py
+|   +-- train_lora_smoke_test.py
+|   +-- train_lora.py
 +-- requirements.txt
 +-- README.md
 ```
 
-## Python Environment
+The `data/`, `models/`, and `outputs/` folders are intentionally ignored by
+Git. They contain downloaded datasets, generated files, model weights, adapters,
+and evaluation outputs.
 
-The notebook originally failed because the selected Python kernel did not have the `datasets` package installed. A project-local Python 3.12 environment was created:
+## Environment
+
+Use the project-local Python 3.12 environment:
 
 ```text
 .venv312
 ```
 
-In VS Code, select this notebook kernel:
+In VS Code notebooks, select:
 
 ```text
 Finetuning Model (Python 3.12)
 ```
 
-To run scripts from the terminal:
+Install dependencies:
+
+```powershell
+.\.venv312\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+The current setup uses CUDA-enabled PyTorch:
+
+```text
+torch: 2.11.0+cu128
+CUDA available: True
+GPU: NVIDIA GeForce RTX 4070 Laptop GPU
+```
+
+## Data Pipeline
+
+Download the mini-dev dataset:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\download-dataset.py
+```
+
+Extract SQLite schemas into compact text:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\extract_schema_text.py
+```
+
+Prepare processed training data:
 
 ```powershell
 .\.venv312\Scripts\python.exe scripts\prepare_training_data.py
 ```
 
-## Raw Dataset
-
-The raw dataset file is:
-
-```text
-data/bird_mini_dev/raw/bird-original.arrow
-```
-
-It contains 500 examples with these columns:
-
-```text
-question_id
-db_id
-question
-evidence
-SQL
-difficulty
-```
-
-Meaning of the important columns:
-
-```text
-question     = natural-language database question
-evidence     = extra hint or rule needed to answer the question
-SQL          = target SQL query
-difficulty   = simple, moderate, or challenging
-db_id        = database identifier
-```
-
-## Notebook
-
-The notebook is:
-
-```text
-notebooks/001-data-exploration.ipynb
-```
-
-It loads the Arrow file and displays the first records in a readable table.
-
-Use it to understand the raw data before training anything.
-
-## Data Preparation
-
-The preparation script is:
-
-```text
-scripts/prepare_training_data.py
-```
-
-It converts each raw dataset row into a training example shaped like this:
-
-```json
-{
-  "instruction": "Convert the database question into a valid SQL query.",
-  "input": "Database ID: ...\nSchema:\n...\nQuestion: ...\nEvidence: ...",
-  "output": "SELECT ...",
-  "metadata": {
-    "question_id": 1471,
-    "db_id": "...",
-    "difficulty": "simple"
-  }
-}
-```
-
-Generated file:
-
-```text
-data/bird_mini_dev/processed/training_data.jsonl
-```
-
-JSONL means JSON Lines. Each line is one complete training example.
-
-Run it with:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\prepare_training_data.py
-```
-
-## Training Data Inspection
-
-The inspection script is:
-
-```text
-scripts/inspect_training_data.py
-```
-
-It checks:
-
-```text
-total number of examples
-missing instruction fields
-missing input fields
-missing output fields
-difficulty distribution
-first 5 readable examples
-```
-
-Run it with:
+Inspect processed examples:
 
 ```powershell
 .\.venv312\Scripts\python.exe scripts\inspect_training_data.py
 ```
 
-Latest inspection result:
-
-```text
-Total examples: 500
-
-Missing fields:
-  instruction: 0
-  input: 0
-  output: 0
-
-Difficulty counts:
-  challenging: 102
-  moderate: 250
-  simple: 148
-```
-
-## Train And Validation Split
-
-The split script is:
-
-```text
-scripts/split_training_data.py
-```
-
-It splits the full processed dataset into:
-
-```text
-data/bird_mini_dev/processed/train.jsonl
-data/bird_mini_dev/processed/validation.jsonl
-```
-
-The validation ratio is:
-
-```python
-VALIDATION_RATIO = 0.2
-```
-
-That means:
-
-```text
-80% training
-20% validation
-```
-
-For this dataset:
-
-```text
-500 total examples
-400 train examples
-100 validation examples
-```
-
-The split is stratified by `difficulty`, which means the script tries to preserve a similar mix of simple, moderate, and challenging examples in both train and validation.
-
-Run it with:
+Split train/validation:
 
 ```powershell
 .\.venv312\Scripts\python.exe scripts\split_training_data.py
 ```
 
-## What The Model Will Learn
-
-The task is:
-
-```text
-instruction + input -> SQL
-```
-
-Example:
-
-```text
-Instruction:
-Convert the database question into a valid SQL query.
-
-Input:
-Database ID: debit_card_specializing
-Question: What is the ratio of customers who pay in EUR against customers who pay in CZK?
-Evidence: ratio = count(EUR) / count(CZK)
-
-Output:
-SELECT ...
-```
-
-This is a text generation task, not an image classification task.
-
-## Important Mentor Notes
-
-The current format is good for a first baseline.
-
-However, serious text-to-SQL models usually need database schema context: table names, column names, column types, and relationships. Right now the training input includes only:
-
-```text
-database ID
-question
-evidence
-```
-
-It does not yet include the actual database schema. That is acceptable for the first learning pass, but schema context will likely become important later.
-
-## Reproduce The Current Data Pipeline
-
-From the project root:
+Prepare chat-style SFT data:
 
 ```powershell
-.\.venv312\Scripts\python.exe scripts\prepare_training_data.py
-.\.venv312\Scripts\python.exe scripts\inspect_training_data.py
-.\.venv312\Scripts\python.exe scripts\split_training_data.py
+.\.venv312\Scripts\python.exe scripts\prepare_sft_data.py
 ```
 
-Expected final files:
+Current data counts:
 
 ```text
-data/bird_mini_dev/processed/training_data.jsonl
-data/bird_mini_dev/processed/train.jsonl
-data/bird_mini_dev/processed/validation.jsonl
+Raw examples: 500
+Train examples: 400
+Validation examples: 100
+SFT train examples: 400
+SFT validation examples: 100
 ```
 
-The `data/`, `models/`, and `outputs/` folders are intentionally ignored by Git. They can contain downloaded datasets, generated training files, model artifacts, and evaluation outputs. Recreate the data files locally with the scripts above instead of committing them.
+## Schema Format
 
-## Baseline Evaluation Set
-
-The baseline evaluation set script is:
-
-```text
-scripts/create_baseline_eval_set.py
-```
-
-It creates a small, balanced sample from `validation.jsonl` so the same examples can be used before and after fine-tuning.
-
-Generated local file:
-
-```text
-outputs/baseline/baseline_eval_set.jsonl
-```
-
-This file is intentionally ignored by Git because `outputs/` is for local generated artifacts.
-
-Run it with:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\create_baseline_eval_set.py
-```
-
-Latest baseline sample:
-
-```text
-Baseline sample size: 20
-challenging: 7
-moderate: 7
-simple: 6
-```
-
-## Next Step
-
-The baseline model runner is:
-
-```text
-scripts/run_baseline_model.py
-```
-
-It loads `outputs/baseline/baseline_eval_set.jsonl`, sends each prompt to a base model, and saves predictions to:
-
-```text
-outputs/baseline/baseline_predictions.jsonl
-```
-
-Default model:
-
-```text
-Qwen/Qwen2.5-Coder-0.5B-Instruct
-```
-
-Run a small smoke test first:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\run_baseline_model.py --limit 2
-```
-
-Then run all 20 baseline examples:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\run_baseline_model.py
-```
-
-This gives us a before-fine-tuning result to compare against later.
-
-Note: the current local PyTorch install is CPU-only. That is fine for a small baseline smoke test, but actual fine-tuning should use a CUDA-enabled PyTorch install.
-
-Model downloads are cached inside the project under:
-
-```text
-models/huggingface
-```
-
-The `models/` folder is ignored by Git, so downloaded base models and future fine-tuned artifacts stay local and are not pushed to GitHub.
-
-Latest schema-informed baseline run:
-
-```text
-Model: Qwen/Qwen2.5-Coder-0.5B-Instruct
-Device: CPU
-Examples: 20
-Exact matches: 0/20
-```
-
-Exact string match is a very strict metric for SQL because two different SQL strings can sometimes be logically equivalent. The schema-informed run still scored 0/20 exact match, but the predictions used more real table and column names. The next improvement should be execution-based evaluation, where generated SQL and gold SQL are run against the same SQLite database and their returned results are compared.
-
-Evaluation notes and failure analysis are documented in:
-
-```text
-docs/evaluation-journal.md
-```
-
-The execution evaluator is:
-
-```text
-scripts/evaluate_sql_execution.py
-```
-
-It runs gold SQL and predicted SQL against the matching SQLite database and compares returned rows.
-
-Latest execution evaluation:
-
-```text
-Exact matches: 0/20
-Execution matches: 1/20
-Gold SQL executed successfully: 20/20
-Predicted SQL executed successfully: 2/20
-```
-
-## Schema Availability Check
-
-The schema availability script is:
-
-```text
-scripts/inspect_schema_availability.py
-```
-
-It checks whether the expected BIRD database folders are available locally under:
-
-```text
-data/bird_mini_dev/dev_databases
-```
-
-Run it with:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\inspect_schema_availability.py
-```
-
-Current status: the official package has been downloaded locally, and all 11 expected database folders are present under `data/bird_mini_dev/dev_databases`.
-
-## Schema Text Extraction
-
-The schema extraction script is:
-
-```text
-scripts/extract_schema_text.py
-```
-
-It reads each local `.sqlite` database and writes compact table/column schema text to:
-
-```text
-data/bird_mini_dev/schema/schema_text.json
-```
-
-Example schema format:
+The schema extraction step turns each SQLite database into compact table/column
+text like:
 
 ```text
 atom(molecule_id, atom_id, element)
@@ -465,98 +172,192 @@ connected(atom_id, atom_id2, bond_id)
 molecule(molecule_id, label)
 ```
 
-Run it with:
+Plain English: each line is one database table, and the names inside
+parentheses are that table's columns.
+
+## Baseline Evaluation
+
+Create the fixed baseline evaluation set:
 
 ```powershell
-.\.venv312\Scripts\python.exe scripts\extract_schema_text.py
+.\.venv312\Scripts\python.exe scripts\create_baseline_eval_set.py
 ```
 
-Latest result:
+Run the base Qwen model:
 
-```text
-Extracted schemas: 11
+```powershell
+.\.venv312\Scripts\python.exe scripts\run_baseline_model.py
 ```
 
-Next step: inject this schema text into each training example and regenerate `training_data.jsonl`, `train.jsonl`, `validation.jsonl`, and the baseline evaluation set.
+Run only a small smoke test:
 
-## SFT Data Preparation
-
-The supervised fine-tuning data script is:
-
-```text
-scripts/prepare_sft_data.py
+```powershell
+.\.venv312\Scripts\python.exe scripts\run_baseline_model.py --limit 2
 ```
 
-It converts processed examples into chat-style training records:
+Evaluate SQL by execution:
 
-```text
-system message -> model behavior
-user message -> instruction, schema, question, evidence
-assistant message -> gold SQL
+```powershell
+.\.venv312\Scripts\python.exe scripts\evaluate_sql_execution.py
 ```
 
-Generated local files:
+Latest base model execution result:
 
 ```text
-data/bird_mini_dev/sft/train_sft.jsonl
-data/bird_mini_dev/sft/validation_sft.jsonl
+Exact matches: 0/20
+Execution matches: 1/20
+Gold SQL executed successfully: 20/20
+Predicted SQL executed successfully: 2/20
 ```
 
-Latest result:
+Execution match is more useful than exact string match because two different
+SQL queries can return the same correct result.
+
+## LoRA Fine-Tuning
+
+We are fine-tuning Qwen with LoRA adapters.
+
+Base model:
 
 ```text
-Train SFT examples: 400
-Validation SFT examples: 100
+Qwen/Qwen2.5-Coder-0.5B-Instruct
 ```
 
-These files are ignored by Git because they live under `data/`.
+LoRA means we freeze the original Qwen weights and train a small adapter on top.
+We are still using Qwen; LoRA is the fine-tuning method.
 
-## Training Readiness
+Run the training readiness check:
 
-The training readiness script is:
-
-```text
-scripts/check_training_readiness.py
+```powershell
+.\.venv312\Scripts\python.exe scripts\check_training_readiness.py
 ```
 
-It checks SFT files, tokenizer compatibility, token lengths, and CUDA availability.
+Run the tiny smoke test:
 
-Latest result:
-
-```text
-Train SFT examples: 400
-Validation SFT examples: 100
-CUDA available: True
-GPU: NVIDIA GeForce RTX 4070 Laptop GPU
-Max token length: 1198
-Recommended max sequence length: 2048
+```powershell
+.\.venv312\Scripts\python.exe scripts\train_lora_smoke_test.py
 ```
 
-CUDA-enabled PyTorch is installed in `.venv312` using the CUDA 12.8 wheel build. The next step is to create a small LoRA/SFT training smoke test before running a longer fine-tuning job.
+Run the first real LoRA trainer:
 
-## LoRA Training Smoke Test
-
-The LoRA smoke-test script is:
-
-```text
-scripts/train_lora_smoke_test.py
+```powershell
+.\.venv312\Scripts\python.exe scripts\train_lora.py --max-steps 20 --gradient-accumulation-steps 4 --eval-every 5 --validation-limit 10 --output-dir models\tinysql-coder-lora-run-001
 ```
 
-It trains only a few examples for two steps. The goal is not model quality; the goal is to prove the GPU training loop works.
-
-Latest result:
+LoRA Run 001 result:
 
 ```text
-GPU: NVIDIA GeForce RTX 4070 Laptop GPU
 trainable params: 4,399,104
-step 1/2 loss: 1.8960
-step 2/2 loss: 1.7379
+all params: 498,431,872
+trainable percent: 0.8826
+final validation loss: 0.3360
 ```
 
-Saved local adapter:
+The adapter is saved locally under:
 
 ```text
-models/lora-smoke-test
+models/tinysql-coder-lora-run-001
 ```
 
-The adapter is ignored by Git because it lives under `models/`.
+## Evaluate A LoRA Adapter
+
+Generate predictions with the LoRA adapter:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\run_baseline_model.py --adapter-path models\tinysql-coder-lora-run-001 --output-path outputs\lora-run-001\predictions.jsonl
+```
+
+Evaluate those predictions by execution:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\evaluate_sql_execution.py --predictions-path outputs\lora-run-001\predictions.jsonl --output-path outputs\lora-run-001\execution_eval.jsonl --summary-path outputs\lora-run-001\execution_eval_summary.json
+```
+
+LoRA Run 001 execution result:
+
+```text
+Exact matches: 0/20
+Execution matches: 0/20
+Gold SQL executed successfully: 20/20
+Predicted SQL executed successfully: 2/20
+```
+
+This means the adapter trained successfully, but did not improve SQL quality in
+the first short run.
+
+## Compare Runs
+
+Generate a local markdown comparison report:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\compare_eval_runs.py
+```
+
+Default comparison:
+
+```text
+outputs/baseline/execution_eval.jsonl
+vs
+outputs/lora-run-001/execution_eval.jsonl
+```
+
+Default generated report:
+
+```text
+outputs/comparisons/base-vs-lora-run-001.md
+```
+
+This output report is ignored by Git.
+
+## Notebooks
+
+Dataset exploration:
+
+```text
+notebooks/001-data-exploration.ipynb
+```
+
+Model file and LoRA target-module inspection:
+
+```text
+notebooks/002-inspect-qwen-model.ipynb
+```
+
+Use the second notebook to see where Qwen layer names like `q_proj`,
+`v_proj`, `gate_proj`, and `down_proj` come from.
+
+## Evaluation Journal
+
+Experiment notes are in:
+
+```text
+docs/evaluation-journal.md
+```
+
+Each major check or evaluation has its own markdown file under `docs/`.
+
+Important entries:
+
+```text
+docs/eval-001-baseline.md
+docs/eval-004-schema-grounding-prompt.md
+docs/lora-training-run-001.md
+docs/eval-005-lora-run-001.md
+docs/eval-comparison-tool.md
+```
+
+## Next Step
+
+The next useful project step is not to blindly train longer.
+
+First inspect the comparison report and identify the most common failure
+pattern. Current evidence points to schema grounding:
+
+```text
+wrong table for a column
+missing join
+invented plausible column
+```
+
+Then improve either the SFT format or training examples so the model learns
+table-column ownership more explicitly before running LoRA Training Run 002.
