@@ -21,3 +21,13 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-09 | LoRA Training Run 001 | [lora-training-run-001.md](lora-training-run-001.md) |
 | 2026-07-09 | LoRA Run 001 Eval 005 | [eval-005-lora-run-001.md](eval-005-lora-run-001.md) |
 | 2026-07-09 | Eval Comparison Tool | [eval-comparison-tool.md](eval-comparison-tool.md) |
+| 2026-07-09 | Failure Analysis Tool | [failure-analysis-tool.md](failure-analysis-tool.md) |
+| 2026-07-09 | Failure Pattern Analysis 001 | [failure-pattern-analysis-001.md](failure-pattern-analysis-001.md) |
+| 2026-07-09 | SFT V2 Schema Guidance | [sft-v2-schema-guidance.md](sft-v2-schema-guidance.md) |
+| 2026-07-09 | LoRA Training Run 002 | [lora-training-run-002.md](lora-training-run-002.md) |
+| 2026-07-09 | LoRA Run 002 Eval 006 | [eval-006-lora-run-002.md](eval-006-lora-run-002.md) |
+| 2026-07-09 | Failure Pattern Analysis 002 | [failure-pattern-analysis-002.md](failure-pattern-analysis-002.md) |
+| 2026-07-09 | SFT V3 Join Focus | [sft-v3-join-focus.md](sft-v3-join-focus.md) |
+| 2026-07-09 | LoRA Training Run 003 | [lora-training-run-003.md](lora-training-run-003.md) |
+| 2026-07-09 | LoRA Run 003 Eval 007 | [eval-007-lora-run-003.md](eval-007-lora-run-003.md) |
+| 2026-07-09 | Failure Pattern Analysis 003 | [failure-pattern-analysis-003.md](failure-pattern-analysis-003.md) |

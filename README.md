@@ -31,12 +31,18 @@ Done so far:
 12. Ran LoRA Training Run 001.
 13. Evaluated Qwen + LoRA Run 001.
 14. Added a comparison tool for base-vs-LoRA evaluation reports.
+15. Added failure-pattern analysis for SQL execution errors.
+16. Created SFT V2 with schema guidance and ran LoRA Run 002.
+17. Created SFT V3 to oversample join-heavy examples for Run 003.
+18. Ran LoRA Run 003 and got the first fine-tuned execution improvement.
 
 Latest high-level result:
 
 ```text
 Base Qwen execution matches:    1/20
 LoRA Run 001 execution matches: 0/20
+LoRA Run 002 execution matches: 0/20
+LoRA Run 003 execution matches: 2/20
 ```
 
 The training pipeline works, but the first short LoRA run did not improve SQL
@@ -69,10 +75,13 @@ the model often puts a real column on the wrong table or skips a needed join.
 |   +-- prepare_training_data.py
 |   +-- split_training_data.py
 |   +-- prepare_sft_data.py
+|   +-- prepare_sft_data_v2.py
+|   +-- prepare_sft_data_v3.py
 |   +-- create_baseline_eval_set.py
 |   +-- run_baseline_model.py
 |   +-- evaluate_sql_execution.py
 |   +-- compare_eval_runs.py
+|   +-- analyze_failure_patterns.py
 |   +-- check_training_readiness.py
 |   +-- train_lora_smoke_test.py
 |   +-- train_lora.py
@@ -244,6 +253,12 @@ Run the first real LoRA trainer:
 .\.venv312\Scripts\python.exe scripts\train_lora.py --max-steps 20 --gradient-accumulation-steps 4 --eval-every 5 --validation-limit 10 --output-dir models\tinysql-coder-lora-run-001
 ```
 
+The trainer can also accept alternate SFT files:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\train_lora.py --train-path data\bird_mini_dev\sft_v2\train_sft_v2.jsonl --validation-path data\bird_mini_dev\sft_v2\validation_sft_v2.jsonl --max-sequence-length 3072 --output-dir models\tinysql-coder-lora-run-002
+```
+
 LoRA Run 001 result:
 
 ```text
@@ -309,6 +324,47 @@ outputs/comparisons/base-vs-lora-run-001.md
 
 This output report is ignored by Git.
 
+## Analyze Failure Patterns
+
+Run failure analysis on a SQL execution-evaluation file:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\analyze_failure_patterns.py
+```
+
+Default input:
+
+```text
+outputs/lora-run-001/execution_eval.jsonl
+```
+
+Default generated report:
+
+```text
+outputs/analysis/lora-run-001-failure-analysis.md
+```
+
+Latest LoRA Run 001 failure pattern:
+
+```text
+wrong_table_for_column: 13
+ambiguous_or_unqualified_column: 2
+executes_wrong_result: 2
+hallucinated_table: 2
+execution_error_other: 1
+```
+
+Mentor translation: the model is often choosing relevant column names but
+placing them on the wrong table. Run 002 should teach table-column ownership and
+join paths more explicitly.
+
+LoRA Run 002 reduced `wrong_table_for_column` failures from 13 to 11, but still
+scored 0/20 execution matches. The next likely improvement is not only clearer
+schema text; it may require more targeted join-focused training examples.
+
+LoRA Run 003 used join-focused oversampling and improved to 2/20 execution
+matches, with 4/20 predicted SQL queries executing successfully.
+
 ## Notebooks
 
 Dataset exploration:
@@ -344,6 +400,8 @@ docs/eval-004-schema-grounding-prompt.md
 docs/lora-training-run-001.md
 docs/eval-005-lora-run-001.md
 docs/eval-comparison-tool.md
+docs/failure-pattern-analysis-001.md
+docs/sft-v2-schema-guidance.md
 ```
 
 ## Next Step

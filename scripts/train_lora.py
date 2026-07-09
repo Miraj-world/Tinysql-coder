@@ -27,7 +27,7 @@ TRAIN_SFT_PATH = PROJECT_ROOT / "data" / "bird_mini_dev" / "sft" / "train_sft.js
 VALIDATION_SFT_PATH = PROJECT_ROOT / "data" / "bird_mini_dev" / "sft" / "validation_sft.jsonl"
 OUTPUT_DIR = PROJECT_ROOT / "models" / "tinysql-coder-lora"
 
-MAX_SEQUENCE_LENGTH = 2048
+DEFAULT_MAX_SEQUENCE_LENGTH = 2048
 SEED = 42
 
 
@@ -39,6 +39,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=2e-4)
     parser.add_argument("--eval-every", type=int, default=10)
     parser.add_argument("--validation-limit", type=int, default=25)
+    parser.add_argument("--max-sequence-length", type=int, default=DEFAULT_MAX_SEQUENCE_LENGTH)
+    parser.add_argument("--train-path", type=Path, default=TRAIN_SFT_PATH)
+    parser.add_argument("--validation-path", type=Path, default=VALIDATION_SFT_PATH)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     return parser.parse_args()
 
@@ -125,14 +128,18 @@ def format_prompt_only(tokenizer: AutoTokenizer, example: dict) -> str:
     )
 
 
-def tokenize_example(tokenizer: AutoTokenizer, example: dict) -> dict[str, list[int]]:
+def tokenize_example(
+    tokenizer: AutoTokenizer,
+    example: dict,
+    max_sequence_length: int,
+) -> dict[str, list[int]]:
     full_text = format_full_conversation(tokenizer, example)
     prompt_text = format_prompt_only(tokenizer, example)
 
     full_tokens = tokenizer(
         full_text,
         add_special_tokens=False,
-        max_length=MAX_SEQUENCE_LENGTH,
+        max_length=max_sequence_length,
         truncation=True,
     )
     prompt_tokens = tokenizer(prompt_text, add_special_tokens=False)
@@ -153,8 +160,15 @@ def tokenize_example(tokenizer: AutoTokenizer, example: dict) -> dict[str, list[
     }
 
 
-def tokenize_dataset(tokenizer: AutoTokenizer, examples: list[dict]) -> list[dict[str, list[int]]]:
-    tokenized_examples = [tokenize_example(tokenizer, example) for example in examples]
+def tokenize_dataset(
+    tokenizer: AutoTokenizer,
+    examples: list[dict],
+    max_sequence_length: int,
+) -> list[dict[str, list[int]]]:
+    tokenized_examples = [
+        tokenize_example(tokenizer, example, max_sequence_length)
+        for example in examples
+    ]
 
     # If an example is so long that the assistant answer was fully truncated,
     # there are no useful label tokens left. Drop it instead of training on it.
@@ -225,16 +239,19 @@ def main() -> None:
     print(f"Using device: {torch.cuda.get_device_name(0)}")
     print(f"Max steps: {args.max_steps}")
     print(f"Gradient accumulation steps: {args.gradient_accumulation_steps}")
+    print(f"Max sequence length: {args.max_sequence_length}")
+    print(f"Train path: {args.train_path}")
+    print(f"Validation path: {args.validation_path}")
 
     tokenizer = load_tokenizer()
-    train_examples = read_jsonl(TRAIN_SFT_PATH)
-    validation_examples = read_jsonl(VALIDATION_SFT_PATH)
+    train_examples = read_jsonl(args.train_path)
+    validation_examples = read_jsonl(args.validation_path)
 
     print(f"Raw train examples: {len(train_examples)}")
     print(f"Raw validation examples: {len(validation_examples)}")
 
-    train_dataset = tokenize_dataset(tokenizer, train_examples)
-    validation_dataset = tokenize_dataset(tokenizer, validation_examples)
+    train_dataset = tokenize_dataset(tokenizer, train_examples, args.max_sequence_length)
+    validation_dataset = tokenize_dataset(tokenizer, validation_examples, args.max_sequence_length)
 
     print(f"Tokenized train examples: {len(train_dataset)}")
     print(f"Tokenized validation examples: {len(validation_dataset)}")
