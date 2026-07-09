@@ -118,18 +118,30 @@ def build_summary(results: list[dict]) -> dict:
     }
 
 
+def parse_args() -> object:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Evaluate predicted SQL by executing it on SQLite databases.")
+    parser.add_argument("--predictions-path", type=Path, default=PREDICTIONS_PATH)
+    parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
+    parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
+    return parser.parse_args()
+
+
 def main() -> None:
-    predictions = read_jsonl(PREDICTIONS_PATH)
+    args = parse_args()
+    predictions = read_jsonl(args.predictions_path)
     results = [evaluate_prediction(record) for record in predictions]
     summary = build_summary(results)
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_jsonl(OUTPUT_PATH, results)
-    SUMMARY_PATH.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    args.output_path.parent.mkdir(parents=True, exist_ok=True)
+    args.summary_path.parent.mkdir(parents=True, exist_ok=True)
+    write_jsonl(args.output_path, results)
+    args.summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     print(f"Loaded predictions: {len(predictions)}")
-    print(f"Wrote execution results to: {OUTPUT_PATH}")
-    print(f"Wrote summary to: {SUMMARY_PATH}")
+    print(f"Wrote execution results to: {args.output_path}")
+    print(f"Wrote summary to: {args.summary_path}")
     print()
     print(f"Exact matches: {summary['exact_matches']}/{summary['total']}")
     print(f"Execution matches: {summary['execution_matches']}/{summary['total']}")

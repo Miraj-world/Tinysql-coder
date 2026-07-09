@@ -19,3 +19,4 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-09 | Training Readiness Check | [training-readiness-check.md](training-readiness-check.md) |
 | 2026-07-09 | LoRA Training Smoke Test | [lora-smoke-test.md](lora-smoke-test.md) |
 | 2026-07-09 | LoRA Training Run 001 | [lora-training-run-001.md](lora-training-run-001.md) |
+| 2026-07-09 | LoRA Run 001 Eval 005 | [eval-005-lora-run-001.md](eval-005-lora-run-001.md) |

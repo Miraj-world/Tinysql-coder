@@ -1,7 +1,8 @@
-"""Run a base model on the fixed baseline evaluation set.
+"""Run a model on the fixed baseline evaluation set.
 
-This is not fine-tuning. It measures how well the untrained base model performs
-so later we can compare fine-tuned results against a real baseline.
+By default this measures the untrained base model. With ``--adapter-path`` it
+loads a local LoRA adapter on top of the base model so we can compare the
+fine-tuned model against the same baseline evaluation set.
 """
 
 import argparse
@@ -9,6 +10,7 @@ import json
 from pathlib import Path
 
 import torch
+from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -46,8 +48,11 @@ def build_messages(prompt: str) -> list[dict]:
     ]
 
 
-def load_model(model_name: str) -> tuple[AutoTokenizer, AutoModelForCausalLM, torch.device]:
-    """Load the model from the project-local Hugging Face cache."""
+def load_model(
+    model_name: str,
+    adapter_path: Path | None,
+) -> tuple[AutoTokenizer, AutoModelForCausalLM, torch.device]:
+    """Load the base model and optionally attach a local LoRA adapter."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float16 if device.type == "cuda" else torch.float32
     MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -63,6 +68,13 @@ def load_model(model_name: str) -> tuple[AutoTokenizer, AutoModelForCausalLM, to
         dtype=dtype,
         trust_remote_code=True,
     )
+
+    if adapter_path is not None:
+        if not adapter_path.exists():
+            raise FileNotFoundError(f"LoRA adapter not found: {adapter_path}")
+
+        model = PeftModel.from_pretrained(model, adapter_path)
+
     model.to(device)
     model.eval()
 
@@ -115,6 +127,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--adapter-path", type=Path, default=None)
+    parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
     return parser.parse_args()
 
 
@@ -125,9 +139,10 @@ def main() -> None:
     if args.limit is not None:
         eval_records = eval_records[: args.limit]
 
-    tokenizer, model, device = load_model(args.model)
+    tokenizer, model, device = load_model(args.model, args.adapter_path)
 
     print(f"Model: {args.model}")
+    print(f"Adapter: {args.adapter_path if args.adapter_path else 'none'}")
     print(f"Model cache: {MODEL_CACHE_DIR}")
     print(f"Device: {device}")
     print(f"Examples: {len(eval_records)}")
@@ -138,6 +153,7 @@ def main() -> None:
         result = {
             **record,
             "model": args.model,
+            "adapter_path": str(args.adapter_path) if args.adapter_path else None,
             "predicted_sql": predicted_sql,
             "exact_match": predicted_sql.strip() == record["expected_sql"].strip(),
         }
@@ -149,11 +165,11 @@ def main() -> None:
         print(f"Predicted SQL: {predicted_sql}")
         print(f"Exact match: {result['exact_match']}")
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_jsonl(OUTPUT_PATH, predictions)
+    args.output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_jsonl(args.output_path, predictions)
     exact_matches = sum(record["exact_match"] for record in predictions)
 
-    print(f"\nWrote predictions to {OUTPUT_PATH}")
+    print(f"\nWrote predictions to {args.output_path}")
     print(f"Exact matches: {exact_matches}/{len(predictions)}")
 
 
