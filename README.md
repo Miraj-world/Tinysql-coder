@@ -36,6 +36,8 @@ Done so far:
 17. Created SFT V3 to oversample join-heavy examples for Run 003.
 18. Ran LoRA Run 003 and got the first fine-tuned execution improvement.
 19. Inspected Run 003's successful predictions to understand what improved.
+20. Created SFT V4 to focus on harder join and subquery examples for Run 004.
+21. Ran LoRA Run 004 and reached the best execution score so far.
 
 Latest high-level result:
 
@@ -44,6 +46,7 @@ Base Qwen execution matches:    1/20
 LoRA Run 001 execution matches: 0/20
 LoRA Run 002 execution matches: 0/20
 LoRA Run 003 execution matches: 2/20
+LoRA Run 004 execution matches: 3/20
 ```
 
 The training pipeline works, but the first short LoRA run did not improve SQL
@@ -78,6 +81,7 @@ the model often puts a real column on the wrong table or skips a needed join.
 |   +-- prepare_sft_data.py
 |   +-- prepare_sft_data_v2.py
 |   +-- prepare_sft_data_v3.py
+|   +-- prepare_sft_data_v4.py
 |   +-- create_baseline_eval_set.py
 |   +-- run_baseline_model.py
 |   +-- evaluate_sql_execution.py
@@ -369,6 +373,10 @@ matches, with 4/20 predicted SQL queries executing successfully.
 The two Run 003 execution matches were a single-table aggregate and a simple
 two-table join. That suggests join-focused training helped on simpler join
 structures, while moderate/challenging joins still need stronger supervision.
+
+LoRA Run 004 used hard-join oversampling and improved to 3/20 execution
+matches. The added success was another simple two-table join, so the next
+frontier is still moderate/challenging join reasoning.
 
 ## Notebooks
 
