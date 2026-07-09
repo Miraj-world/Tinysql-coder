@@ -36,3 +36,4 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-09 | LoRA Training Run 004 | [lora-training-run-004.md](lora-training-run-004.md) |
 | 2026-07-09 | LoRA Run 004 Eval 008 | [eval-008-lora-run-004.md](eval-008-lora-run-004.md) |
 | 2026-07-09 | Failure Pattern Analysis 004 | [failure-pattern-analysis-004.md](failure-pattern-analysis-004.md) |
+| 2026-07-09 | Hard Failure Inspection 001 | [hard-failure-inspection-001.md](hard-failure-inspection-001.md) |

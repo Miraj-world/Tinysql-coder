@@ -38,6 +38,7 @@ Done so far:
 19. Inspected Run 003's successful predictions to understand what improved.
 20. Created SFT V4 to focus on harder join and subquery examples for Run 004.
 21. Ran LoRA Run 004 and reached the best execution score so far.
+22. Added hard-failure inspection to guide Run 005 planning.
 
 Latest high-level result:
 
@@ -377,6 +378,12 @@ structures, while moderate/challenging joins still need stronger supervision.
 LoRA Run 004 used hard-join oversampling and improved to 3/20 execution
 matches. The added success was another simple two-table join, so the next
 frontier is still moderate/challenging join reasoning.
+
+Hard-failure inspection points to the next training format:
+
+```text
+needed columns -> owning tables -> join path -> final SQL
+```
 
 ## Notebooks
 
