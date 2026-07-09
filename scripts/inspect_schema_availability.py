@@ -1,3 +1,9 @@
+"""Check whether the official Mini-Dev database folders exist locally.
+
+The Hugging Face rows alone are not enough for text-to-SQL. We need the
+matching SQLite databases so prompts and evaluators can use real schemas.
+"""
+
 from collections import Counter
 from pathlib import Path
 

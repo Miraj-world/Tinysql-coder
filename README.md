@@ -141,7 +141,7 @@ It converts each raw dataset row into a training example shaped like this:
 ```json
 {
   "instruction": "Convert the database question into a valid SQL query.",
-  "input": "Database ID: ...\nQuestion: ...\nEvidence: ...",
+  "input": "Database ID: ...\nSchema:\n...\nQuestion: ...\nEvidence: ...",
   "output": "SELECT ...",
   "metadata": {
     "question_id": 1471,
@@ -386,7 +386,7 @@ models/huggingface
 
 The `models/` folder is ignored by Git, so downloaded base models and future fine-tuned artifacts stay local and are not pushed to GitHub.
 
-Latest baseline run:
+Latest schema-informed baseline run:
 
 ```text
 Model: Qwen/Qwen2.5-Coder-0.5B-Instruct
@@ -395,12 +395,29 @@ Examples: 20
 Exact matches: 0/20
 ```
 
-Exact string match is a very strict metric for SQL because two different SQL strings can sometimes be logically equivalent. Still, this baseline is useful because the model often guesses table names and column names. The next improvement should add database schema context to each prompt before fine-tuning.
+Exact string match is a very strict metric for SQL because two different SQL strings can sometimes be logically equivalent. The schema-informed run still scored 0/20 exact match, but the predictions used more real table and column names. The next improvement should be execution-based evaluation, where generated SQL and gold SQL are run against the same SQLite database and their returned results are compared.
 
 Evaluation notes and failure analysis are documented in:
 
 ```text
 docs/evaluation-journal.md
+```
+
+The execution evaluator is:
+
+```text
+scripts/evaluate_sql_execution.py
+```
+
+It runs gold SQL and predicted SQL against the matching SQLite database and compares returned rows.
+
+Latest execution evaluation:
+
+```text
+Exact matches: 0/20
+Execution matches: 1/20
+Gold SQL executed successfully: 20/20
+Predicted SQL executed successfully: 2/20
 ```
 
 ## Schema Availability Check
@@ -461,3 +478,85 @@ Extracted schemas: 11
 ```
 
 Next step: inject this schema text into each training example and regenerate `training_data.jsonl`, `train.jsonl`, `validation.jsonl`, and the baseline evaluation set.
+
+## SFT Data Preparation
+
+The supervised fine-tuning data script is:
+
+```text
+scripts/prepare_sft_data.py
+```
+
+It converts processed examples into chat-style training records:
+
+```text
+system message -> model behavior
+user message -> instruction, schema, question, evidence
+assistant message -> gold SQL
+```
+
+Generated local files:
+
+```text
+data/bird_mini_dev/sft/train_sft.jsonl
+data/bird_mini_dev/sft/validation_sft.jsonl
+```
+
+Latest result:
+
+```text
+Train SFT examples: 400
+Validation SFT examples: 100
+```
+
+These files are ignored by Git because they live under `data/`.
+
+## Training Readiness
+
+The training readiness script is:
+
+```text
+scripts/check_training_readiness.py
+```
+
+It checks SFT files, tokenizer compatibility, token lengths, and CUDA availability.
+
+Latest result:
+
+```text
+Train SFT examples: 400
+Validation SFT examples: 100
+CUDA available: True
+GPU: NVIDIA GeForce RTX 4070 Laptop GPU
+Max token length: 1198
+Recommended max sequence length: 2048
+```
+
+CUDA-enabled PyTorch is installed in `.venv312` using the CUDA 12.8 wheel build. The next step is to create a small LoRA/SFT training smoke test before running a longer fine-tuning job.
+
+## LoRA Training Smoke Test
+
+The LoRA smoke-test script is:
+
+```text
+scripts/train_lora_smoke_test.py
+```
+
+It trains only a few examples for two steps. The goal is not model quality; the goal is to prove the GPU training loop works.
+
+Latest result:
+
+```text
+GPU: NVIDIA GeForce RTX 4070 Laptop GPU
+trainable params: 4,399,104
+step 1/2 loss: 1.8960
+step 2/2 loss: 1.7379
+```
+
+Saved local adapter:
+
+```text
+models/lora-smoke-test
+```
+
+The adapter is ignored by Git because it lives under `models/`.

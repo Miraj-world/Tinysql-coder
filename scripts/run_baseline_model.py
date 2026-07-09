@@ -1,3 +1,9 @@
+"""Run a base model on the fixed baseline evaluation set.
+
+This is not fine-tuning. It measures how well the untrained base model performs
+so later we can compare fine-tuned results against a real baseline.
+"""
+
 import argparse
 import json
 from pathlib import Path
@@ -41,6 +47,7 @@ def build_messages(prompt: str) -> list[dict]:
 
 
 def load_model(model_name: str) -> tuple[AutoTokenizer, AutoModelForCausalLM, torch.device]:
+    """Load the model from the project-local Hugging Face cache."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float16 if device.type == "cuda" else torch.float32
     MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -90,6 +97,7 @@ def generate_sql(
 
 
 def clean_generated_sql(text: str) -> str:
+    """Remove common markdown fences so evaluation sees only SQL text."""
     stripped = text.strip()
 
     if stripped.startswith("```sql"):

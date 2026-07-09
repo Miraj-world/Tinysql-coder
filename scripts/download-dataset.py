@@ -1,3 +1,9 @@
+"""Download the BIRD Mini-Dev question/SQL rows from Hugging Face.
+
+This gives us the benchmark examples, but not the full database schemas.
+The matching SQLite databases come from the official Mini-Dev package.
+"""
+
 from pathlib import Path
 
 from datasets import load_dataset

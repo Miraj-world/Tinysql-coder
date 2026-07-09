@@ -1,3 +1,9 @@
+"""Print a readable quality check for processed training examples.
+
+Use this whenever the preparation script changes. It catches missing fields
+and makes JSONL easier to inspect than reading long one-line records manually.
+"""
+
 import json
 from collections import Counter
 from pathlib import Path

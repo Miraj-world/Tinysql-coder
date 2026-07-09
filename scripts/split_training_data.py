@@ -1,3 +1,9 @@
+"""Split processed examples into train and validation sets.
+
+The split is stratified by difficulty so validation keeps a similar mix of
+simple, moderate, and challenging examples.
+"""
+
 import json
 import random
 from collections import Counter, defaultdict
@@ -33,6 +39,7 @@ def difficulty_counts(examples: list[dict]) -> Counter:
 
 
 def split_examples(examples: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Create a reproducible difficulty-balanced train/validation split."""
     random_generator = random.Random(RANDOM_SEED)
     grouped_examples = defaultdict(list)
 

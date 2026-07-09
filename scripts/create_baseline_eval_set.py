@@ -1,3 +1,9 @@
+"""Create a small fixed validation sample for baseline experiments.
+
+The same 20 examples are reused across prompt/model changes so we can compare
+before and after results without changing the test set underneath ourselves.
+"""
+
 import json
 import random
 from collections import Counter, defaultdict
@@ -12,6 +18,12 @@ OUTPUT_PATH = OUTPUT_DIR / "baseline_eval_set.jsonl"
 SAMPLE_SIZE = 20
 RANDOM_SEED = 42
 
+SCHEMA_GROUNDING_RULES = """Before writing SQL:
+1. Use only tables and columns listed in the schema.
+2. Do not use the database ID as a table name.
+3. If the question needs columns from multiple tables, join the tables using shared key columns.
+4. If a column is not in a table, do not reference it from that table."""
+
 
 def read_jsonl(path: Path) -> list[dict]:
     with path.open("r", encoding="utf-8") as input_file:
@@ -25,9 +37,11 @@ def write_jsonl(path: Path, examples: list[dict]) -> None:
 
 
 def build_prompt(example: dict) -> str:
+    """Build the exact prompt sent to the base model during baseline runs."""
     return "\n\n".join(
         [
             example["instruction"],
+            SCHEMA_GROUNDING_RULES,
             example["input"],
             "Return only the SQL query.",
         ]

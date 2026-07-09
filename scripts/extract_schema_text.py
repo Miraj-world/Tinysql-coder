@@ -1,3 +1,9 @@
+"""Extract compact schema text from each BIRD Mini-Dev SQLite database.
+
+The model needs table and column names to write grounded SQL. This script turns
+SQLite metadata into prompt-friendly lines such as table(column_a, column_b).
+"""
+
 import json
 import sqlite3
 from pathlib import Path
@@ -22,6 +28,7 @@ def find_sqlite_file(database_dir: Path) -> Path:
 
 
 def get_table_names(connection: sqlite3.Connection) -> list[str]:
+    """Return user-created tables, excluding SQLite internal metadata tables."""
     rows = connection.execute(
         """
         SELECT name
@@ -40,6 +47,7 @@ def get_column_names(connection: sqlite3.Connection, table_name: str) -> list[st
 
 
 def quote_identifier(identifier: str) -> str:
+    """Safely quote table names that may contain unusual characters."""
     escaped = identifier.replace('"', '""')
     return f'"{escaped}"'
 
