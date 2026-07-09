@@ -35,6 +35,7 @@ Done so far:
 16. Created SFT V2 with schema guidance and ran LoRA Run 002.
 17. Created SFT V3 to oversample join-heavy examples for Run 003.
 18. Ran LoRA Run 003 and got the first fine-tuned execution improvement.
+19. Inspected Run 003's successful predictions to understand what improved.
 
 Latest high-level result:
 
@@ -364,6 +365,10 @@ schema text; it may require more targeted join-focused training examples.
 
 LoRA Run 003 used join-focused oversampling and improved to 2/20 execution
 matches, with 4/20 predicted SQL queries executing successfully.
+
+The two Run 003 execution matches were a single-table aggregate and a simple
+two-table join. That suggests join-focused training helped on simpler join
+structures, while moderate/challenging joins still need stronger supervision.
 
 ## Notebooks
 
