@@ -12,6 +12,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VALIDATION_PATH = PROJECT_ROOT / "data" / "bird_mini_dev" / "processed" / "validation.jsonl"
+SCHEMA_GUIDANCE_PATH = PROJECT_ROOT / "data" / "bird_mini_dev" / "schema" / "schema_guidance.json"
 OUTPUT_DIR = PROJECT_ROOT / "outputs" / "baseline"
 OUTPUT_PATH = OUTPUT_DIR / "baseline_eval_set.jsonl"
 
@@ -24,10 +25,20 @@ SCHEMA_GROUNDING_RULES = """Before writing SQL:
 3. If the question needs columns from multiple tables, join the tables using shared key columns.
 4. If a column is not in a table, do not reference it from that table."""
 
+OWNERSHIP_TEACHER_RULES = """Before writing SQL:
+1. Identify each important column and the table that owns it.
+2. Identify the join keys needed to connect those tables.
+3. Do not place a column on a table unless that column is listed under that table.
+4. End with FINAL_SQL: followed by only the SQL query."""
+
 
 def read_jsonl(path: Path) -> list[dict]:
     with path.open("r", encoding="utf-8") as input_file:
         return [json.loads(line) for line in input_file if line.strip()]
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def write_jsonl(path: Path, examples: list[dict]) -> None:
@@ -44,6 +55,23 @@ def build_prompt(example: dict) -> str:
             SCHEMA_GROUNDING_RULES,
             example["input"],
             "Return only the SQL query.",
+        ]
+    )
+
+
+def build_ownership_teacher_prompt(example: dict, schema_guidance_by_db: dict[str, str]) -> str:
+    db_id = example["metadata"]["db_id"]
+    schema_guidance = schema_guidance_by_db.get(db_id)
+    if schema_guidance is None:
+        raise KeyError(f"No schema guidance found for db_id: {db_id}")
+
+    return "\n\n".join(
+        [
+            example["instruction"],
+            OWNERSHIP_TEACHER_RULES,
+            "Schema guidance:",
+            schema_guidance,
+            example["input"],
         ]
     )
 
@@ -73,29 +101,54 @@ def choose_balanced_sample(examples: list[dict]) -> list[dict]:
     return selected
 
 
-def create_eval_record(example: dict) -> dict:
+def create_eval_record(
+    example: dict,
+    prompt_style: str,
+    schema_guidance_by_db: dict[str, str],
+) -> dict:
     metadata = example["metadata"]
+    if prompt_style == "ownership_teacher_v5":
+        prompt = build_ownership_teacher_prompt(example, schema_guidance_by_db)
+    else:
+        prompt = build_prompt(example)
+
     return {
         "question_id": metadata["question_id"],
         "db_id": metadata["db_id"],
         "difficulty": metadata["difficulty"],
-        "prompt": build_prompt(example),
+        "prompt": prompt,
+        "prompt_style": prompt_style,
         "expected_sql": example["output"],
     }
 
 
-def main() -> None:
-    validation_examples = read_jsonl(VALIDATION_PATH)
-    sample = choose_balanced_sample(validation_examples)
-    eval_records = [create_eval_record(example) for example in sample]
+def parse_args() -> object:
+    import argparse
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_jsonl(OUTPUT_PATH, eval_records)
+    parser = argparse.ArgumentParser(description="Create a fixed 20-example SQL evaluation set.")
+    parser.add_argument("--prompt-style", choices=["baseline", "ownership_teacher_v5"], default="baseline")
+    parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    validation_examples = read_jsonl(VALIDATION_PATH)
+    schema_guidance_by_db = read_json(SCHEMA_GUIDANCE_PATH)
+    sample = choose_balanced_sample(validation_examples)
+    eval_records = [
+        create_eval_record(example, args.prompt_style, schema_guidance_by_db)
+        for example in sample
+    ]
+
+    args.output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_jsonl(args.output_path, eval_records)
 
     difficulty_counts = Counter(record["difficulty"] for record in eval_records)
 
     print(f"Loaded validation examples: {len(validation_examples)}")
-    print(f"Wrote baseline eval set: {OUTPUT_PATH}")
+    print(f"Prompt style: {args.prompt_style}")
+    print(f"Wrote eval set: {args.output_path}")
     print(f"Baseline sample size: {len(eval_records)}")
     print("Difficulty counts:")
     for difficulty, count in sorted(difficulty_counts.items()):

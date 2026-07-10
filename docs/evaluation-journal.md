@@ -37,3 +37,10 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-09 | LoRA Run 004 Eval 008 | [eval-008-lora-run-004.md](eval-008-lora-run-004.md) |
 | 2026-07-09 | Failure Pattern Analysis 004 | [failure-pattern-analysis-004.md](failure-pattern-analysis-004.md) |
 | 2026-07-09 | Hard Failure Inspection 001 | [hard-failure-inspection-001.md](hard-failure-inspection-001.md) |
+| 2026-07-09 | SFT V5 Ownership Teacher | [sft-v5-ownership-teacher.md](sft-v5-ownership-teacher.md) |
+| 2026-07-09 | LoRA Training Run 005 | [lora-training-run-005.md](lora-training-run-005.md) |
+| 2026-07-09 | LoRA Run 005 Eval 009 | [eval-009-lora-run-005.md](eval-009-lora-run-005.md) |
+| 2026-07-09 | SQL Repair Experiment 001 | [sql-repair-run-004-001.md](sql-repair-run-004-001.md) |
+| 2026-07-09 | SQL Repair Experiment 002 | [sql-repair-run-004-002.md](sql-repair-run-004-002.md) |
+| 2026-07-09 | SQL Repair Experiment 003 | [sql-repair-run-004-003.md](sql-repair-run-004-003.md) |
+| 2026-07-10 | SQL Repair Experiment 004 | [sql-repair-run-004-004.md](sql-repair-run-004-004.md) |

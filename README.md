@@ -39,6 +39,12 @@ Done so far:
 20. Created SFT V4 to focus on harder join and subquery examples for Run 004.
 21. Ran LoRA Run 004 and reached the best execution score so far.
 22. Added hard-failure inspection to guide Run 005 planning.
+23. Tried SFT V5 ownership-teacher data for Run 005.
+24. Evaluated Run 005 and confirmed that free-form ownership reasoning hurt execution accuracy.
+25. Added a conservative SQL alias-repair experiment for Run 004 predictions.
+26. Extended SQL repair with conservative join-aware repair using direct foreign keys.
+27. Added semantic lookup-table repair for ID columns compared to human-readable labels.
+28. Added value canonicalization for safe case-insensitive database value matches.
 
 Latest high-level result:
 
@@ -48,11 +54,24 @@ LoRA Run 001 execution matches: 0/20
 LoRA Run 002 execution matches: 0/20
 LoRA Run 003 execution matches: 2/20
 LoRA Run 004 execution matches: 3/20
+LoRA Run 005 execution matches: 0/20
+Run 004 + alias repair matches: 3/20
+Run 004 + join repair matches:  4/20
+Run 004 + semantic repair matches: 5/20
+Run 004 + value repair matches:    6/20
 ```
 
-The training pipeline works, but the first short LoRA run did not improve SQL
-execution accuracy yet. The main failure pattern is still schema grounding:
-the model often puts a real column on the wrong table or skips a needed join.
+The training pipeline works, and Run 004 is currently the best checkpoint.
+Run 005 was a useful negative result: asking the model to emit ownership notes
+before SQL made generation less stable. A conservative alias-repair pass made
+more Run 004 predictions executable, but did not improve execution matches. A
+join-aware repair pass improved Run 004 to 4/20 execution matches and made
+11/20 predictions executable. A semantic lookup repair improved Run 004 to
+5/20 execution matches by fixing an ID-column-to-label comparison. Value
+canonicalization improved Run 004 to 6/20 execution matches by fixing a safe
+case mismatch. The main failure pattern is still schema grounding: the model
+often puts a real column on the wrong table, skips a needed join, or keeps an
+unnecessary join that changes the result.
 
 ## Project Structure
 
@@ -83,11 +102,13 @@ the model often puts a real column on the wrong table or skips a needed join.
 |   +-- prepare_sft_data_v2.py
 |   +-- prepare_sft_data_v3.py
 |   +-- prepare_sft_data_v4.py
+|   +-- prepare_sft_data_v5.py
 |   +-- create_baseline_eval_set.py
 |   +-- run_baseline_model.py
 |   +-- evaluate_sql_execution.py
 |   +-- compare_eval_runs.py
 |   +-- analyze_failure_patterns.py
+|   +-- repair_sql_predictions.py
 |   +-- check_training_readiness.py
 |   +-- train_lora_smoke_test.py
 |   +-- train_lora.py
@@ -379,11 +400,15 @@ LoRA Run 004 used hard-join oversampling and improved to 3/20 execution
 matches. The added success was another simple two-table join, so the next
 frontier is still moderate/challenging join reasoning.
 
-Hard-failure inspection points to the next training format:
+Hard-failure inspection pointed to this possible training format:
 
 ```text
 needed columns -> owning tables -> join path -> final SQL
 ```
+
+SFT V5 tested that idea directly, but it made generation less stable and scored
+0/20 execution matches. A narrower SQL alias-repair experiment improved
+executability from 5/20 to 8/20 but kept execution matches at 3/20.
 
 ## Notebooks
 
@@ -422,20 +447,28 @@ docs/eval-005-lora-run-001.md
 docs/eval-comparison-tool.md
 docs/failure-pattern-analysis-001.md
 docs/sft-v2-schema-guidance.md
+docs/eval-009-lora-run-005.md
+docs/sql-repair-run-004-001.md
+docs/sql-repair-run-004-002.md
+docs/sql-repair-run-004-003.md
+docs/sql-repair-run-004-004.md
 ```
 
 ## Next Step
 
-The next useful project step is not to blindly train longer.
+The next useful project step is a guarded wrong-join pruning experiment, not
+another free-form reasoning LoRA run.
 
-First inspect the comparison report and identify the most common failure
-pattern. Current evidence points to schema grounding:
+Current evidence points to remaining value and schema-grounding issues:
 
 ```text
 wrong table for a column
-missing join
 invented plausible column
+unnecessary or wrong join
+SQL executes but returns the wrong rows
 ```
 
-Then improve either the SFT format or training examples so the model learns
-table-column ownership more explicitly before running LoRA Training Run 002.
+Alias repair, join repair, semantic lookup repair, and value canonicalization
+together improved Run 004 from 3/20 to 6/20 execution matches. The next repair
+layer should explore whether obviously unnecessary joins can be removed without
+changing required filters or row counts.

@@ -112,6 +112,9 @@ def clean_generated_sql(text: str) -> str:
     """Remove common markdown fences so evaluation sees only SQL text."""
     stripped = text.strip()
 
+    if "FINAL_SQL:" in stripped:
+        stripped = stripped.split("FINAL_SQL:", maxsplit=1)[1].strip()
+
     if stripped.startswith("```sql"):
         stripped = stripped.removeprefix("```sql").strip()
     elif stripped.startswith("```"):
@@ -127,6 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--eval-set-path", type=Path, default=EVAL_SET_PATH)
     parser.add_argument("--adapter-path", type=Path, default=None)
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
     return parser.parse_args()
@@ -134,7 +138,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    eval_records = read_jsonl(EVAL_SET_PATH)
+    eval_records = read_jsonl(args.eval_set_path)
 
     if args.limit is not None:
         eval_records = eval_records[: args.limit]
