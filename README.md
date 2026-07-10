@@ -47,6 +47,7 @@ Done so far:
 28. Added value canonicalization for safe case-insensitive database value matches.
 29. Added guarded leading-join pruning and duplicate-projection DISTINCT repair.
 30. Tried guarded table-split repair for wrong-table column references.
+31. Created error-aware SFT V6 data for Run 006 planning supervision.
 
 Latest high-level result:
 
@@ -80,6 +81,18 @@ metadata, but did not improve beyond 7/20. The main failure pattern is still
 schema grounding: the model often puts a real column on the wrong table, skips
 a needed join, or chooses the wrong fact table.
 
+SFT V6 is prepared locally with short plan-type supervision:
+
+```text
+PLAN_TYPE: local_schema_fix | lookup_or_value_fix | fact_table_first | fresh_query_plan
+...
+FINAL_SQL:
+SELECT ...
+```
+
+It produced 738 train examples and 100 validation examples under
+`data/bird_mini_dev/sft_v6/`.
+
 ## Project Structure
 
 ```text
@@ -110,6 +123,7 @@ a needed join, or chooses the wrong fact table.
 |   +-- prepare_sft_data_v3.py
 |   +-- prepare_sft_data_v4.py
 |   +-- prepare_sft_data_v5.py
+|   +-- prepare_sft_data_v6.py
 |   +-- create_baseline_eval_set.py
 |   +-- run_baseline_model.py
 |   +-- evaluate_sql_execution.py
@@ -461,12 +475,13 @@ docs/sql-repair-run-004-003.md
 docs/sql-repair-run-004-004.md
 docs/sql-repair-run-004-005.md
 docs/sql-repair-run-004-006.md
+docs/sft-v6-error-aware.md
 ```
 
 ## Next Step
 
-The next useful project step is an error-aware SFT V6 dataset, not another
-free-form reasoning LoRA run.
+The next useful project step is LoRA Run 006 using the error-aware SFT V6
+dataset, not another repair-layer experiment.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -481,6 +496,17 @@ Alias repair, join repair, semantic lookup repair, and value canonicalization
 together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
 DISTINCT repair improved it again to 7/20. A guarded table-split repair fixed
 repair infrastructure gaps, including quoted qualified columns, but did not
-improve the score. The next dataset should teach the model to separate local
-repairable mistakes from wrong fact-table or wrong query-shape mistakes that
-need a fresh SQL plan.
+improve the score. V6 now teaches the model to separate local repairable
+mistakes from wrong fact-table or wrong query-shape mistakes that need a fresh
+SQL plan.
+
+Train Run 006 with:
+
+```powershell
+.\.venv312\Scripts\python.exe scripts\train_lora.py `
+  --train-path data\bird_mini_dev\sft_v6\train_sft_v6.jsonl `
+  --validation-path data\bird_mini_dev\sft_v6\validation_sft_v6.jsonl `
+  --output-dir models\tinysql-coder-lora-run-006 `
+  --max-steps 80 `
+  --eval-every 10
+```
