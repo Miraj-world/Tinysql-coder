@@ -45,6 +45,7 @@ Done so far:
 26. Extended SQL repair with conservative join-aware repair using direct foreign keys.
 27. Added semantic lookup-table repair for ID columns compared to human-readable labels.
 28. Added value canonicalization for safe case-insensitive database value matches.
+29. Added guarded leading-join pruning and duplicate-projection DISTINCT repair.
 
 Latest high-level result:
 
@@ -59,6 +60,7 @@ Run 004 + alias repair matches: 3/20
 Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
 Run 004 + value repair matches:    6/20
+Run 004 + distinct repair matches: 7/20
 ```
 
 The training pipeline works, and Run 004 is currently the best checkpoint.
@@ -69,9 +71,10 @@ join-aware repair pass improved Run 004 to 4/20 execution matches and made
 11/20 predictions executable. A semantic lookup repair improved Run 004 to
 5/20 execution matches by fixing an ID-column-to-label comparison. Value
 canonicalization improved Run 004 to 6/20 execution matches by fixing a safe
-case mismatch. The main failure pattern is still schema grounding: the model
-often puts a real column on the wrong table, skips a needed join, or keeps an
-unnecessary join that changes the result.
+case mismatch. Leading-join pruning plus duplicate-projection DISTINCT repair
+improved Run 004 to 7/20 execution matches. The main failure pattern is still
+schema grounding: the model often puts a real column on the wrong table, skips
+a needed join, or chooses the wrong fact table.
 
 ## Project Structure
 
@@ -452,11 +455,12 @@ docs/sql-repair-run-004-001.md
 docs/sql-repair-run-004-002.md
 docs/sql-repair-run-004-003.md
 docs/sql-repair-run-004-004.md
+docs/sql-repair-run-004-005.md
 ```
 
 ## Next Step
 
-The next useful project step is a guarded wrong-join pruning experiment, not
+The next useful project step is a guarded table-replacement experiment, not
 another free-form reasoning LoRA run.
 
 Current evidence points to remaining value and schema-grounding issues:
@@ -464,11 +468,12 @@ Current evidence points to remaining value and schema-grounding issues:
 ```text
 wrong table for a column
 invented plausible column
-unnecessary or wrong join
+wrong fact table
 SQL executes but returns the wrong rows
 ```
 
 Alias repair, join repair, semantic lookup repair, and value canonicalization
-together improved Run 004 from 3/20 to 6/20 execution matches. The next repair
-layer should explore whether obviously unnecessary joins can be removed without
-changing required filters or row counts.
+together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
+DISTINCT repair improved it again to 7/20. The next repair layer should explore
+whether a wrong fact table can be replaced with a schema-connected table when
+the generated query references columns that clearly belong elsewhere.

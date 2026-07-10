@@ -1,7 +1,6 @@
 """Repair simple schema-grounding errors in generated SQL predictions.
 
-This is a post-generation experiment. It makes conservative repairs in two
-layers:
+This is a post-generation experiment. It makes conservative layered repairs:
 
 1. Alias repair: the correct owning table is already present in the SQL.
 2. Join repair: the correct owning table is missing, but a direct foreign-key
@@ -10,6 +9,9 @@ layers:
    string value that belongs in a lookup table.
 4. Value repair: a string literal has the wrong casing for a real database
    value.
+5. Join pruning: a leading joined table is not referenced outside the join
+   condition.
+6. Distinct repair: a simple single-column projection returns duplicate rows.
 """
 
 import argparse
@@ -21,13 +23,27 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004" / "predictions.jsonl"
-DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-semantic-repaired" / "predictions.jsonl"
+DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-distinct-repaired" / "predictions.jsonl"
 DATABASES_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "dev_databases"
 
 NO_SUCH_COLUMN_RE = re.compile(r"no such column: (?P<name>.+)", re.IGNORECASE)
 QUALIFIED_COLUMN_RE = re.compile(r"\b(?P<alias>[A-Za-z_][\w]*)\.(?P<column>[A-Za-z_][\w]*)\b")
 STRING_COMPARISON_RE = re.compile(
     r"\b(?P<alias>[A-Za-z_][\w]*)\.(?P<column>[A-Za-z_][\w]*)\s*=\s*'(?P<value>(?:''|[^'])*)'",
+    re.IGNORECASE,
+)
+LEADING_INNER_JOIN_RE = re.compile(
+    r"(?P<prefix>\bFROM\s+)"
+    r"[`\"]?(?P<left_table>[A-Za-z_][\w]*)[`\"]?"
+    r"(?:\s+(?:AS\s+)?(?P<left_alias>[A-Za-z_][\w]*))?"
+    r"\s+INNER\s+JOIN\s+"
+    r"[`\"]?(?P<right_table>[A-Za-z_][\w]*)[`\"]?"
+    r"(?:\s+(?:AS\s+)?(?P<right_alias>[A-Za-z_][\w]*))?"
+    r"\s+ON\s+(?P<on_clause>.*?)(?=\b(?:INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b|$)",
+    re.IGNORECASE,
+)
+SIMPLE_SELECT_COLUMN_RE = re.compile(
+    r"^\s*SELECT\s+(?!DISTINCT\b)(?P<column>[A-Za-z_][\w]*\.[A-Za-z_][\w]*)\s+FROM\b",
     re.IGNORECASE,
 )
 SELECT_RE = re.compile(r"\bSELECT\b", re.IGNORECASE)
@@ -53,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--disable-semantic-repair",
         action="store_true",
-        help="Do not repair lookup-table comparisons or string value casing after SQL execution succeeds.",
+        help="Do not run post-execution repairs such as lookup, value, pruning, or DISTINCT repair.",
     )
     return parser.parse_args()
 
@@ -269,6 +285,84 @@ def replace_string_literal_for_column(
         return match.group(0)
 
     return STRING_COMPARISON_RE.sub(replace_match, sql)
+
+
+def alias_reference_pattern(alias: str) -> re.Pattern:
+    return re.compile(rf"\b{re.escape(alias)}\.", re.IGNORECASE)
+
+
+def is_simple_two_alias_join(on_clause: str, left_alias: str, right_alias: str) -> bool:
+    simple_join_re = re.compile(
+        rf"^\s*(?:{re.escape(left_alias)}\.[A-Za-z_][\w]*\s*=\s*{re.escape(right_alias)}\.[A-Za-z_][\w]*|"
+        rf"{re.escape(right_alias)}\.[A-Za-z_][\w]*\s*=\s*{re.escape(left_alias)}\.[A-Za-z_][\w]*)\s*$",
+        re.IGNORECASE,
+    )
+    return bool(simple_join_re.match(on_clause))
+
+
+def leading_join_prune_for_sql(sql: str) -> tuple[str, str] | None:
+    if has_nested_select(sql):
+        return None
+
+    match = LEADING_INNER_JOIN_RE.search(sql)
+    if match is None:
+        return None
+
+    left_table = match.group("left_table")
+    right_table = match.group("right_table")
+    left_alias = match.group("left_alias") or left_table
+    right_alias = match.group("right_alias") or right_table
+
+    if left_alias.upper() in SQL_KEYWORD_ALIASES or right_alias.upper() in SQL_KEYWORD_ALIASES:
+        return None
+
+    if not is_simple_two_alias_join(match.group("on_clause"), left_alias, right_alias):
+        return None
+
+    before_join = sql[: match.start()]
+    after_join = sql[match.end() :]
+    if alias_reference_pattern(left_alias).search(before_join + after_join):
+        return None
+
+    right_from = f"FROM {right_table} AS {right_alias}"
+    repaired_sql = f"{before_join}{right_from} {after_join.lstrip()}".rstrip()
+    note = f"removed leading unused join table {left_table} AS {left_alias}"
+    return repaired_sql, note
+
+
+def has_duplicate_rows(rows: list[list[object]]) -> bool:
+    seen = set()
+    for row in rows:
+        row_key = json.dumps(row, sort_keys=True, default=str)
+        if row_key in seen:
+            return True
+        seen.add(row_key)
+    return False
+
+
+def distinct_repair_for_sql(db_id: str, sql: str) -> tuple[str, str] | None:
+    if has_nested_select(sql):
+        return None
+    if re.search(r"\b(?:COUNT|SUM|AVG|MIN|MAX)\s*\(", sql, re.IGNORECASE):
+        return None
+    if re.search(r"\bGROUP\s+BY\b", sql, re.IGNORECASE):
+        return None
+
+    match = SIMPLE_SELECT_COLUMN_RE.search(sql)
+    if match is None:
+        return None
+
+    result = execute_sql(db_id, sql)
+    if not result["ok"] or not result["rows"] or not has_duplicate_rows(result["rows"]):
+        return None
+
+    repaired_sql = SIMPLE_SELECT_COLUMN_RE.sub(
+        f"SELECT DISTINCT {match.group('column')} FROM",
+        sql,
+        count=1,
+    )
+    note = f"added DISTINCT for duplicate {match.group('column')} projection"
+    return repaired_sql, note
 
 
 def replace_string_comparison(
@@ -503,7 +597,13 @@ def repair_sql(
             value_repair = None
             if lookup_repair is None:
                 value_repair = value_repair_for_sql(db_id, repaired_sql, database_info)
-            semantic_repair = lookup_repair or value_repair
+            prune_repair = None
+            if lookup_repair is None and value_repair is None:
+                prune_repair = leading_join_prune_for_sql(repaired_sql)
+            distinct_repair = None
+            if lookup_repair is None and value_repair is None and prune_repair is None:
+                distinct_repair = distinct_repair_for_sql(db_id, repaired_sql)
+            semantic_repair = lookup_repair or value_repair or prune_repair or distinct_repair
             if semantic_repair is None:
                 break
             next_sql, note = semantic_repair
@@ -514,7 +614,7 @@ def repair_sql(
                 break
             repair_notes.append(note)
             repaired_sql = next_sql
-            break
+            continue
 
         replacement = replacement_alias_for_error(repaired_sql, result["error"], schema)
         if replacement is None:
