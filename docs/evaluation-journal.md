@@ -45,3 +45,4 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-09 | SQL Repair Experiment 003 | [sql-repair-run-004-003.md](sql-repair-run-004-003.md) |
 | 2026-07-10 | SQL Repair Experiment 004 | [sql-repair-run-004-004.md](sql-repair-run-004-004.md) |
 | 2026-07-10 | SQL Repair Experiment 005 | [sql-repair-run-004-005.md](sql-repair-run-004-005.md) |
+| 2026-07-10 | SQL Repair Experiment 006 | [sql-repair-run-004-006.md](sql-repair-run-004-006.md) |

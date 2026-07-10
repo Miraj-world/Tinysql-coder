@@ -9,9 +9,11 @@ This is a post-generation experiment. It makes conservative layered repairs:
    string value that belongs in a lookup table.
 4. Value repair: a string literal has the wrong casing for a real database
    value.
-5. Join pruning: a leading joined table is not referenced outside the join
+5. Foreign-key PK inference: a table-level foreign key omits the target column,
+   but the target table has one clear primary-key column.
+6. Join pruning: a leading joined table is not referenced outside the join
    condition.
-6. Distinct repair: a simple single-column projection returns duplicate rows.
+7. Distinct repair: a simple single-column projection returns duplicate rows.
 """
 
 import argparse
@@ -23,11 +25,15 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004" / "predictions.jsonl"
-DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-distinct-repaired" / "predictions.jsonl"
+DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-table-repaired" / "predictions.jsonl"
 DATABASES_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "dev_databases"
 
 NO_SUCH_COLUMN_RE = re.compile(r"no such column: (?P<name>.+)", re.IGNORECASE)
-QUALIFIED_COLUMN_RE = re.compile(r"\b(?P<alias>[A-Za-z_][\w]*)\.(?P<column>[A-Za-z_][\w]*)\b")
+QUALIFIED_COLUMN_RE = re.compile(
+    r"\b(?P<alias>[A-Za-z_][\w]*)\."
+    r"(?P<quote>[`\"]?)(?P<column>[A-Za-z_][\w]*)(?P=quote)"
+    r"(?=\W|$)"
+)
 STRING_COMPARISON_RE = re.compile(
     r"\b(?P<alias>[A-Za-z_][\w]*)\.(?P<column>[A-Za-z_][\w]*)\s*=\s*'(?P<value>(?:''|[^'])*)'",
     re.IGNORECASE,
@@ -95,6 +101,7 @@ def sqlite_path_for_database(db_id: str) -> Path:
 def load_database_info(db_id: str) -> dict:
     schema: dict[str, set[str]] = {}
     column_types: dict[str, dict[str, str]] = {}
+    primary_keys: dict[str, list[str]] = {}
     foreign_keys: list[tuple[str, str, str, str]] = []
     with sqlite3.connect(sqlite_path_for_database(db_id)) as connection:
         table_rows = connection.execute(
@@ -103,24 +110,43 @@ def load_database_info(db_id: str) -> dict:
 
         for (table_name,) in table_rows:
             columns = connection.execute(f'PRAGMA table_info("{table_name}")').fetchall()
-            schema[table_name.lower()] = {column[1].lower() for column in columns}
-            column_types[table_name.lower()] = {
+            table_key = table_name.lower()
+            schema[table_key] = {column[1].lower() for column in columns}
+            column_types[table_key] = {
                 column[1].lower(): (column[2] or "").lower()
                 for column in columns
             }
+            primary_keys[table_key] = [
+                column[1].lower()
+                for column in columns
+                if column[5]
+            ]
+
+        for (table_name,) in table_rows:
             for foreign_key in connection.execute(f'PRAGMA foreign_key_list("{table_name}")').fetchall():
-                if foreign_key[2] is None or foreign_key[3] is None or foreign_key[4] is None:
+                if foreign_key[2] is None or foreign_key[3] is None:
+                    continue
+                target_table = foreign_key[2].lower()
+                target_column = foreign_key[4].lower() if foreign_key[4] is not None else None
+                if target_column is None and len(primary_keys.get(target_table, [])) == 1:
+                    target_column = primary_keys[target_table][0]
+                if target_column is None:
                     continue
                 foreign_keys.append(
                     (
                         table_name.lower(),
                         foreign_key[3].lower(),
-                        foreign_key[2].lower(),
-                        foreign_key[4].lower(),
+                        target_table,
+                        target_column,
                     )
                 )
 
-    return {"schema": schema, "column_types": column_types, "foreign_keys": foreign_keys}
+    return {
+        "schema": schema,
+        "column_types": column_types,
+        "primary_keys": primary_keys,
+        "foreign_keys": foreign_keys,
+    }
 
 
 def normalize_value(value: object) -> object:
@@ -568,8 +594,9 @@ def replace_qualified_column_alias(sql: str, bad_alias: str, good_alias: str, co
     def replace_match(match: re.Match) -> str:
         alias = match.group("alias")
         matched_column = match.group("column")
+        quote = match.group("quote")
         if alias.lower() == bad_alias and matched_column.lower() == column:
-            return f"{good_alias}.{matched_column}"
+            return f"{good_alias}.{quote}{matched_column}{quote}"
         return match.group(0)
 
     return QUALIFIED_COLUMN_RE.sub(replace_match, sql)

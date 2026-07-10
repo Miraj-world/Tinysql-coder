@@ -46,6 +46,7 @@ Done so far:
 27. Added semantic lookup-table repair for ID columns compared to human-readable labels.
 28. Added value canonicalization for safe case-insensitive database value matches.
 29. Added guarded leading-join pruning and duplicate-projection DISTINCT repair.
+30. Tried guarded table-split repair for wrong-table column references.
 
 Latest high-level result:
 
@@ -61,6 +62,7 @@ Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
 Run 004 + value repair matches:    6/20
 Run 004 + distinct repair matches: 7/20
+Run 004 + table repair matches:    7/20
 ```
 
 The training pipeline works, and Run 004 is currently the best checkpoint.
@@ -72,7 +74,9 @@ join-aware repair pass improved Run 004 to 4/20 execution matches and made
 5/20 execution matches by fixing an ID-column-to-label comparison. Value
 canonicalization improved Run 004 to 6/20 execution matches by fixing a safe
 case mismatch. Leading-join pruning plus duplicate-projection DISTINCT repair
-improved Run 004 to 7/20 execution matches. The main failure pattern is still
+improved Run 004 to 7/20 execution matches. A guarded table-split repair
+improved schema handling for quoted columns and incomplete SQLite foreign-key
+metadata, but did not improve beyond 7/20. The main failure pattern is still
 schema grounding: the model often puts a real column on the wrong table, skips
 a needed join, or chooses the wrong fact table.
 
@@ -456,12 +460,13 @@ docs/sql-repair-run-004-002.md
 docs/sql-repair-run-004-003.md
 docs/sql-repair-run-004-004.md
 docs/sql-repair-run-004-005.md
+docs/sql-repair-run-004-006.md
 ```
 
 ## Next Step
 
-The next useful project step is a guarded table-replacement experiment, not
-another free-form reasoning LoRA run.
+The next useful project step is an error-aware SFT V6 dataset, not another
+free-form reasoning LoRA run.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -474,6 +479,8 @@ SQL executes but returns the wrong rows
 
 Alias repair, join repair, semantic lookup repair, and value canonicalization
 together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
-DISTINCT repair improved it again to 7/20. The next repair layer should explore
-whether a wrong fact table can be replaced with a schema-connected table when
-the generated query references columns that clearly belong elsewhere.
+DISTINCT repair improved it again to 7/20. A guarded table-split repair fixed
+repair infrastructure gaps, including quoted qualified columns, but did not
+improve the score. The next dataset should teach the model to separate local
+repairable mistakes from wrong fact-table or wrong query-shape mistakes that
+need a fresh SQL plan.
