@@ -48,6 +48,7 @@ Done so far:
 29. Added guarded leading-join pruning and duplicate-projection DISTINCT repair.
 30. Tried guarded table-split repair for wrong-table column references.
 31. Created error-aware SFT V6 data for Run 006 planning supervision.
+32. Trained and evaluated LoRA Run 006.
 
 Latest high-level result:
 
@@ -58,12 +59,14 @@ LoRA Run 002 execution matches: 0/20
 LoRA Run 003 execution matches: 2/20
 LoRA Run 004 execution matches: 3/20
 LoRA Run 005 execution matches: 0/20
+LoRA Run 006 execution matches: 3/20
 Run 004 + alias repair matches: 3/20
 Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
 Run 004 + value repair matches:    6/20
 Run 004 + distinct repair matches: 7/20
 Run 004 + table repair matches:    7/20
+Run 006 + repair matches:          3/20
 ```
 
 The training pipeline works, and Run 004 is currently the best checkpoint.
@@ -81,7 +84,7 @@ metadata, but did not improve beyond 7/20. The main failure pattern is still
 schema grounding: the model often puts a real column on the wrong table, skips
 a needed join, or chooses the wrong fact table.
 
-SFT V6 is prepared locally with short plan-type supervision:
+SFT V6 used short plan-type supervision:
 
 ```text
 PLAN_TYPE: local_schema_fix | lookup_or_value_fix | fact_table_first | fresh_query_plan
@@ -90,8 +93,9 @@ FINAL_SQL:
 SELECT ...
 ```
 
-It produced 738 train examples and 100 validation examples under
-`data/bird_mini_dev/sft_v6/`.
+Run 006 learned the format in training, but scored 3/20 execution matches. Its
+repair pass increased executable SQL from 7/20 to 10/20, but execution matches
+stayed 3/20.
 
 ## Project Structure
 
@@ -476,12 +480,14 @@ docs/sql-repair-run-004-004.md
 docs/sql-repair-run-004-005.md
 docs/sql-repair-run-004-006.md
 docs/sft-v6-error-aware.md
+docs/lora-training-run-006.md
+docs/eval-010-lora-run-006.md
 ```
 
 ## Next Step
 
-The next useful project step is LoRA Run 006 using the error-aware SFT V6
-dataset, not another repair-layer experiment.
+The next useful project step is improving schema guidance quality, not another
+reasoning-format LoRA run.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -494,19 +500,9 @@ SQL executes but returns the wrong rows
 
 Alias repair, join repair, semantic lookup repair, and value canonicalization
 together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
-DISTINCT repair improved it again to 7/20. A guarded table-split repair fixed
-repair infrastructure gaps, including quoted qualified columns, but did not
-improve the score. V6 now teaches the model to separate local repairable
-mistakes from wrong fact-table or wrong query-shape mistakes that need a fresh
-SQL plan.
-
-Train Run 006 with:
-
-```powershell
-.\.venv312\Scripts\python.exe scripts\train_lora.py `
-  --train-path data\bird_mini_dev\sft_v6\train_sft_v6.jsonl `
-  --validation-path data\bird_mini_dev\sft_v6\validation_sft_v6.jsonl `
-  --output-dir models\tinysql-coder-lora-run-006 `
-  --max-steps 80 `
-  --eval-every 10
-```
+DISTINCT repair improved it again to 7/20. V6 planning supervision did not
+improve raw execution accuracy. The likely bottleneck is now the schema
+guidance itself: the prompt's possible join keys include noisy same-name column
+matches that are not always real relationships. The next script change should
+make schema guidance prefer real SQLite foreign keys and only include inferred
+joins when they are clearly safe.
