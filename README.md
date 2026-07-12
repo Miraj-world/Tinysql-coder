@@ -49,6 +49,8 @@ Done so far:
 30. Tried guarded table-split repair for wrong-table column references.
 31. Created error-aware SFT V6 data for Run 006 planning supervision.
 32. Trained and evaluated LoRA Run 006.
+33. Improved schema guidance join hints to prefer real foreign keys.
+34. Trained and evaluated LoRA Run 007.
 
 Latest high-level result:
 
@@ -60,6 +62,7 @@ LoRA Run 003 execution matches: 2/20
 LoRA Run 004 execution matches: 3/20
 LoRA Run 005 execution matches: 0/20
 LoRA Run 006 execution matches: 3/20
+LoRA Run 007 execution matches: 4/20
 Run 004 + alias repair matches: 3/20
 Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
@@ -67,6 +70,7 @@ Run 004 + value repair matches:    6/20
 Run 004 + distinct repair matches: 7/20
 Run 004 + table repair matches:    7/20
 Run 006 + repair matches:          3/20
+Run 007 + repair matches:          6/20
 ```
 
 The training pipeline works, and Run 004 is currently the best checkpoint.
@@ -95,7 +99,8 @@ SELECT ...
 
 Run 006 learned the format in training, but scored 3/20 execution matches. Its
 repair pass increased executable SQL from 7/20 to 10/20, but execution matches
-stayed 3/20.
+stayed 3/20. Cleaning schema guidance join hints improved Run 007 to 4/20 raw
+execution matches and 6/20 after repair.
 
 ## Project Structure
 
@@ -482,12 +487,15 @@ docs/sql-repair-run-004-006.md
 docs/sft-v6-error-aware.md
 docs/lora-training-run-006.md
 docs/eval-010-lora-run-006.md
+docs/schema-guidance-quality-001.md
+docs/lora-training-run-007.md
+docs/eval-011-lora-run-007.md
 ```
 
 ## Next Step
 
-The next useful project step is improving schema guidance quality, not another
-reasoning-format LoRA run.
+The next useful project step is a schema-guidance V3 / SFT V7 experiment, not
+another free-form reasoning-format run.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -500,9 +508,16 @@ SQL executes but returns the wrong rows
 
 Alias repair, join repair, semantic lookup repair, and value canonicalization
 together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
-DISTINCT repair improved it again to 7/20. V6 planning supervision did not
-improve raw execution accuracy. The likely bottleneck is now the schema
-guidance itself: the prompt's possible join keys include noisy same-name column
-matches that are not always real relationships. The next script change should
-make schema guidance prefer real SQLite foreign keys and only include inferred
-joins when they are clearly safe.
+DISTINCT repair improved it again to 7/20. V6 planning supervision alone did
+not improve raw execution accuracy. Cleaner schema guidance did help Run 007,
+raising raw execution matches to 4/20 and repaired matches to 6/20.
+
+The next dataset should keep the cleaner join hints and add a small amount of
+gold-query-derived supervision for source-table choice:
+
+```text
+QUESTION -> required source tables -> fact table -> final SQL
+```
+
+The model still needs help choosing the correct fact table before it writes
+SQL.

@@ -49,3 +49,6 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-10 | SFT V6 Error-Aware Planning | [sft-v6-error-aware.md](sft-v6-error-aware.md) |
 | 2026-07-11 | LoRA Training Run 006 | [lora-training-run-006.md](lora-training-run-006.md) |
 | 2026-07-11 | LoRA Run 006 Eval 010 | [eval-010-lora-run-006.md](eval-010-lora-run-006.md) |
+| 2026-07-12 | Schema Guidance Quality 001 | [schema-guidance-quality-001.md](schema-guidance-quality-001.md) |
+| 2026-07-12 | LoRA Training Run 007 | [lora-training-run-007.md](lora-training-run-007.md) |
+| 2026-07-12 | LoRA Run 007 Eval 011 | [eval-011-lora-run-007.md](eval-011-lora-run-007.md) |
