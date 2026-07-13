@@ -7,6 +7,7 @@ fine-tuned model against the same baseline evaluation set.
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import torch
@@ -22,6 +23,7 @@ MODEL_CACHE_DIR = PROJECT_ROOT / "models" / "huggingface"
 
 MODEL_NAME = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
 MAX_NEW_TOKENS = 256
+SQL_START_RE = re.compile(r"\b(?:SELECT|WITH)\b", re.IGNORECASE)
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -114,6 +116,10 @@ def clean_generated_sql(text: str) -> str:
 
     if "FINAL_SQL:" in stripped:
         stripped = stripped.split("FINAL_SQL:", maxsplit=1)[1].strip()
+
+    sql_start = SQL_START_RE.search(stripped)
+    if sql_start is not None:
+        stripped = stripped[sql_start.start() :].strip()
 
     if stripped.startswith("```sql"):
         stripped = stripped.removeprefix("```sql").strip()

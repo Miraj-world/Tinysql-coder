@@ -51,6 +51,7 @@ Done so far:
 32. Trained and evaluated LoRA Run 006.
 33. Improved schema guidance join hints to prefer real foreign keys.
 34. Trained and evaluated LoRA Run 007.
+35. Created SFT V7 with source-table supervision and evaluated LoRA Run 008.
 
 Latest high-level result:
 
@@ -63,6 +64,7 @@ LoRA Run 004 execution matches: 3/20
 LoRA Run 005 execution matches: 0/20
 LoRA Run 006 execution matches: 3/20
 LoRA Run 007 execution matches: 4/20
+LoRA Run 008 execution matches: 2/20
 Run 004 + alias repair matches: 3/20
 Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
@@ -71,6 +73,7 @@ Run 004 + distinct repair matches: 7/20
 Run 004 + table repair matches:    7/20
 Run 006 + repair matches:          3/20
 Run 007 + repair matches:          6/20
+Run 008 + repair matches:          3/20
 ```
 
 The training pipeline works, and Run 004 is currently the best checkpoint.
@@ -490,12 +493,15 @@ docs/eval-010-lora-run-006.md
 docs/schema-guidance-quality-001.md
 docs/lora-training-run-007.md
 docs/eval-011-lora-run-007.md
+docs/sft-v7-source-table-supervision.md
+docs/lora-training-run-008.md
+docs/eval-012-lora-run-008.md
 ```
 
 ## Next Step
 
-The next useful project step is a schema-guidance V3 / SFT V7 experiment, not
-another free-form reasoning-format run.
+The next useful project step is a smaller post-generation repair or focused
+error-set evaluation, not another pre-SQL label format.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -510,14 +516,15 @@ Alias repair, join repair, semantic lookup repair, and value canonicalization
 together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
 DISTINCT repair improved it again to 7/20. V6 planning supervision alone did
 not improve raw execution accuracy. Cleaner schema guidance did help Run 007,
-raising raw execution matches to 4/20 and repaired matches to 6/20.
+raising raw execution matches to 4/20 and repaired matches to 6/20. SFT V7
+source-table labels hurt Run 008, which fell to 2/20 raw and 3/20 after repair.
 
-The next dataset should keep the cleaner join hints and add a small amount of
-gold-query-derived supervision for source-table choice:
+The next improvement should be mechanical and narrow:
 
 ```text
-QUESTION -> required source tables -> fact table -> final SQL
+repair obvious syntax fragments
+repair alias references when the correct table is already present
+build a focused mini-eval over remaining wrong-table failures
 ```
 
-The model still needs help choosing the correct fact table before it writes
-SQL.
+The best overall system remains Run 004 plus repair at 7/20 execution matches.

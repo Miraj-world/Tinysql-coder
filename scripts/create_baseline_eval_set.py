@@ -38,6 +38,13 @@ ERROR_AWARE_RULES = """Before writing SQL:
 4. Use fresh_query_plan when the question needs a subquery, date transform, UNION, CTE, or multi-step aggregation.
 5. End with FINAL_SQL: followed by only the SQL query."""
 
+SOURCE_TABLE_RULES = """Before writing SQL:
+1. Choose PLAN_TYPE: local_schema_fix, lookup_or_value_fix, fact_table_first, or fresh_query_plan.
+2. List REQUIRED_SOURCE_TABLES before writing joins.
+3. Choose PRIMARY_FACT_TABLE: the table that contains the main rows being counted, averaged, filtered, or ranked.
+4. Do not join through a table just because it has a similar column name.
+5. End with FINAL_SQL: followed by only the SQL query."""
+
 
 def read_jsonl(path: Path) -> list[dict]:
     with path.open("r", encoding="utf-8") as input_file:
@@ -100,6 +107,23 @@ def build_error_aware_prompt(example: dict, schema_guidance_by_db: dict[str, str
     )
 
 
+def build_source_table_prompt(example: dict, schema_guidance_by_db: dict[str, str]) -> str:
+    db_id = example["metadata"]["db_id"]
+    schema_guidance = schema_guidance_by_db.get(db_id)
+    if schema_guidance is None:
+        raise KeyError(f"No schema guidance found for db_id: {db_id}")
+
+    return "\n\n".join(
+        [
+            example["instruction"],
+            SOURCE_TABLE_RULES,
+            "Schema guidance:",
+            schema_guidance,
+            example["input"],
+        ]
+    )
+
+
 def choose_balanced_sample(examples: list[dict]) -> list[dict]:
     random_generator = random.Random(RANDOM_SEED)
     grouped_examples = defaultdict(list)
@@ -135,6 +159,8 @@ def create_eval_record(
         prompt = build_ownership_teacher_prompt(example, schema_guidance_by_db)
     elif prompt_style == "error_aware_v6":
         prompt = build_error_aware_prompt(example, schema_guidance_by_db)
+    elif prompt_style == "source_table_v7":
+        prompt = build_source_table_prompt(example, schema_guidance_by_db)
     else:
         prompt = build_prompt(example)
 
@@ -154,7 +180,7 @@ def parse_args() -> object:
     parser = argparse.ArgumentParser(description="Create a fixed 20-example SQL evaluation set.")
     parser.add_argument(
         "--prompt-style",
-        choices=["baseline", "ownership_teacher_v5", "error_aware_v6"],
+        choices=["baseline", "ownership_teacher_v5", "error_aware_v6", "source_table_v7"],
         default="baseline",
     )
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
