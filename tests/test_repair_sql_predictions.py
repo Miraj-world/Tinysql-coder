@@ -7,7 +7,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.repair_sql_predictions import unqualified_column_repair_for_error
+from scripts.repair_sql_predictions import (
+    undeclared_alias_repair_for_error,
+    unqualified_column_repair_for_error,
+)
 
 
 SCHEMA = {
@@ -73,6 +76,55 @@ class UnqualifiedColumnRepairTests(unittest.TestCase):
             "SELECT p.height FROM players AS p "
             "INNER JOIN stats AS s ON p.id = s.id "
             "WHERE p.height > 180 AND p.height < 220 AND p.name = 'height'",
+        )
+
+
+class UndeclaredAliasRepairTests(unittest.TestCase):
+    def test_replaces_undeclared_alias_with_single_owner(self):
+        sql = "SELECT T1.name FROM players WHERE T1.height > 180"
+
+        repair = undeclared_alias_repair_for_error(
+            sql,
+            "no such column: T1.name",
+            SCHEMA,
+        )
+
+        self.assertEqual(
+            repair,
+            (
+                "SELECT players.name FROM players WHERE T1.height > 180",
+                "t1",
+                "players",
+                "name",
+            ),
+        )
+
+    def test_rejects_column_owned_by_multiple_in_scope_tables(self):
+        sql = "SELECT T1.id FROM players AS p INNER JOIN stats AS s ON p.id = s.id"
+
+        self.assertIsNone(
+            undeclared_alias_repair_for_error(sql, "no such column: T1.id", SCHEMA)
+        )
+
+    def test_rejects_owner_that_is_not_in_query(self):
+        sql = "SELECT T1.height FROM stats AS s"
+
+        self.assertIsNone(
+            undeclared_alias_repair_for_error(sql, "no such column: T1.height", SCHEMA)
+        )
+
+    def test_rejects_nested_query(self):
+        sql = "SELECT T1.name FROM (SELECT id FROM players) AS p"
+
+        self.assertIsNone(
+            undeclared_alias_repair_for_error(sql, "no such column: T1.name", SCHEMA)
+        )
+
+    def test_rejects_declared_alias(self):
+        sql = "SELECT p.score FROM players AS p INNER JOIN stats AS s ON p.id = s.id"
+
+        self.assertIsNone(
+            undeclared_alias_repair_for_error(sql, "no such column: p.score", SCHEMA)
         )
 
 

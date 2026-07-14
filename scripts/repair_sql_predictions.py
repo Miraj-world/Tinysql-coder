@@ -16,6 +16,8 @@ This is a post-generation experiment. It makes conservative layered repairs:
 7. Distinct repair: a simple single-column projection returns duplicate rows.
 8. Unqualified-column repair: a flat joined query uses a bare column name and
    exactly one table already in the query owns it.
+9. Undeclared-alias repair: a flat query uses an alias that was never declared,
+   and exactly one table already in the query owns the referenced column.
 """
 
 import argparse
@@ -452,6 +454,38 @@ def replacement_alias_for_error(sql: str, error: str, schema: dict[str, set[str]
     return bad_alias, owner_aliases[0]
 
 
+def undeclared_alias_repair_for_error(
+    sql: str,
+    error: str,
+    schema: dict[str, set[str]],
+) -> tuple[str, str, str, str] | None:
+    """Replace a missing alias only when one in-scope table owns the column."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if bad_alias in aliases:
+        return None
+
+    owner_aliases = build_owner_aliases(schema, aliases).get(column, [])
+    if len(owner_aliases) != 1:
+        return None
+
+    owner_alias = owner_aliases[0]
+    repaired_sql = replace_qualified_column_alias(sql, bad_alias, owner_alias, column)
+    if repaired_sql == sql:
+        return None
+    return repaired_sql, bad_alias, owner_alias, column
+
+
 def unqualified_column_repair_for_error(
     sql: str,
     error: str,
@@ -698,6 +732,19 @@ def repair_sql(
 
         replacement = replacement_alias_for_error(repaired_sql, result["error"], schema)
         if replacement is None:
+            undeclared_alias_repair = undeclared_alias_repair_for_error(
+                repaired_sql,
+                result["error"],
+                schema,
+            )
+            if undeclared_alias_repair is not None:
+                next_sql, bad_alias, owner_alias, column = undeclared_alias_repair
+                repair_notes.append(f"{bad_alias}.{column} -> {owner_alias}.{column}")
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
             unqualified_repair = unqualified_column_repair_for_error(
                 repaired_sql,
                 result["error"],

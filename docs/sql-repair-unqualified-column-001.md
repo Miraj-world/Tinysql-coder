@@ -82,3 +82,6 @@ queries. A safe first rule would require that the missing alias-qualified
 column has exactly one owner among tables already present in the same flat
 query. Nested derived tables and queries with multiple broken aliases should
 remain out of scope.
+
+This candidate was implemented and evaluated in
+[SQL Repair Experiment 008](sql-repair-undeclared-alias-001.md).
