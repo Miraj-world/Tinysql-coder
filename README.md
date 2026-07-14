@@ -270,6 +270,9 @@ Create the fixed baseline evaluation set:
 .\.venv312\Scripts\python.exe scripts\create_baseline_eval_set.py
 ```
 
+Use `--sample-size 100` to build the full held-out validation evaluation set
+instead of the default balanced 20-question sample.
+
 Run the base Qwen model:
 
 ```powershell
@@ -287,6 +290,10 @@ Evaluate SQL by execution:
 ```powershell
 .\.venv312\Scripts\python.exe scripts\evaluate_sql_execution.py
 ```
+
+Each SQLite query is interrupted after 5 seconds by default so a pathological
+model prediction cannot freeze a large evaluation. Override this with
+`--query-timeout-seconds` when needed.
 
 Latest base model execution result:
 

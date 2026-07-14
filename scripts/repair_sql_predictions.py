@@ -28,6 +28,7 @@ import argparse
 import json
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 
@@ -35,6 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004" / "predictions.jsonl"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-table-repaired" / "predictions.jsonl"
 DATABASES_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "dev_databases"
+QUERY_TIMEOUT_SECONDS = 5.0
 
 NO_SUCH_COLUMN_RE = re.compile(r"no such column: (?P<name>.+)", re.IGNORECASE)
 QUALIFIED_COLUMN_RE = re.compile(
@@ -170,12 +172,30 @@ def normalize_rows(rows: list[tuple]) -> list[list[object]]:
 
 
 def execute_sql(db_id: str, sql: str) -> dict:
+    timed_out = False
+    connection = None
     try:
-        with sqlite3.connect(sqlite_path_for_database(db_id)) as connection:
-            rows = connection.execute(sql).fetchall()
+        connection = sqlite3.connect(sqlite_path_for_database(db_id))
+        deadline = time.monotonic() + QUERY_TIMEOUT_SECONDS
+
+        def stop_expensive_query() -> int:
+            nonlocal timed_out
+            timed_out = time.monotonic() >= deadline
+            return int(timed_out)
+
+        connection.set_progress_handler(stop_expensive_query, 10_000)
+        rows = connection.execute(sql).fetchall()
         return {"ok": True, "rows": normalize_rows(rows), "error": None}
     except Exception as error:
-        return {"ok": False, "rows": None, "error": str(error)}
+        error_message = (
+            f"query timeout after {QUERY_TIMEOUT_SECONDS:g} seconds"
+            if timed_out
+            else str(error)
+        )
+        return {"ok": False, "rows": None, "error": error_message}
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def parse_aliases(sql: str) -> dict[str, str]:

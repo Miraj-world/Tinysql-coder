@@ -6,6 +6,7 @@ the predicted SQL returns the same rows as the gold SQL.
 
 import json
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ DATABASES_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "dev_databases"
 OUTPUT_DIR = PROJECT_ROOT / "outputs" / "baseline"
 OUTPUT_PATH = OUTPUT_DIR / "execution_eval.jsonl"
 SUMMARY_PATH = OUTPUT_DIR / "execution_eval_summary.json"
+DEFAULT_QUERY_TIMEOUT_SECONDS = 5.0
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -54,12 +56,25 @@ def normalize_rows(rows: list[tuple]) -> list[list[Any]]:
     return sorted(normalized_rows, key=lambda row: json.dumps(row, sort_keys=True, default=str))
 
 
-def execute_sql(sqlite_path: Path, sql: str) -> dict:
+def execute_sql(
+    sqlite_path: Path,
+    sql: str,
+    timeout_seconds: float = DEFAULT_QUERY_TIMEOUT_SECONDS,
+) -> dict:
     """Run SQL and capture either normalized rows or the execution error."""
+    timed_out = False
+    connection = None
     try:
-        with sqlite3.connect(sqlite_path) as connection:
-            cursor = connection.execute(sql)
-            rows = cursor.fetchall()
+        connection = sqlite3.connect(sqlite_path)
+        deadline = time.monotonic() + timeout_seconds
+
+        def stop_expensive_query() -> int:
+            nonlocal timed_out
+            timed_out = time.monotonic() >= deadline
+            return int(timed_out)
+
+        connection.set_progress_handler(stop_expensive_query, 10_000)
+        rows = connection.execute(sql).fetchall()
 
         return {
             "ok": True,
@@ -67,17 +82,28 @@ def execute_sql(sqlite_path: Path, sql: str) -> dict:
             "error": None,
         }
     except Exception as error:
+        error_message = (
+            f"query timeout after {timeout_seconds:g} seconds"
+            if timed_out
+            else str(error)
+        )
         return {
             "ok": False,
             "rows": None,
-            "error": str(error),
+            "error": error_message,
         }
+    finally:
+        if connection is not None:
+            connection.close()
 
 
-def evaluate_prediction(record: dict) -> dict:
+def evaluate_prediction(
+    record: dict,
+    timeout_seconds: float = DEFAULT_QUERY_TIMEOUT_SECONDS,
+) -> dict:
     sqlite_path = sqlite_path_for_database(record["db_id"])
-    gold_result = execute_sql(sqlite_path, record["expected_sql"])
-    predicted_result = execute_sql(sqlite_path, record["predicted_sql"])
+    gold_result = execute_sql(sqlite_path, record["expected_sql"], timeout_seconds)
+    predicted_result = execute_sql(sqlite_path, record["predicted_sql"], timeout_seconds)
 
     execution_match = (
         gold_result["ok"]
@@ -125,13 +151,24 @@ def parse_args() -> object:
     parser.add_argument("--predictions-path", type=Path, default=PREDICTIONS_PATH)
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
+    parser.add_argument(
+        "--query-timeout-seconds",
+        type=float,
+        default=DEFAULT_QUERY_TIMEOUT_SECONDS,
+        help="Interrupt any one SQLite query after this many seconds (default: 5).",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.query_timeout_seconds <= 0:
+        raise ValueError("--query-timeout-seconds must be greater than 0")
     predictions = read_jsonl(args.predictions_path)
-    results = [evaluate_prediction(record) for record in predictions]
+    results = [
+        evaluate_prediction(record, args.query_timeout_seconds)
+        for record in predictions
+    ]
     summary = build_summary(results)
 
     args.output_path.parent.mkdir(parents=True, exist_ok=True)
