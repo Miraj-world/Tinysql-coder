@@ -74,3 +74,4 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | LoRA Training Run 009 | [lora-training-run-009.md](lora-training-run-009.md) |
 | 2026-07-14 | LoRA Run 009 Eval 013 | [eval-013-lora-run-009.md](eval-013-lora-run-009.md) |
 | 2026-07-14 | Run 009 Full Validation Eval 014 | [eval-014-lora-run-009-full-validation.md](eval-014-lora-run-009-full-validation.md) |
+| 2026-07-14 | Model Capacity Decision 001 | [model-capacity-decision-001.md](model-capacity-decision-001.md) |

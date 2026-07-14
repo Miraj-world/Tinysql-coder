@@ -34,6 +34,7 @@ SEED = 42
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a LoRA adapter on BIRD Mini-Dev SFT data.")
     parser.add_argument("--max-steps", type=int, default=50)
+    parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=2e-4)
@@ -58,9 +59,9 @@ def read_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in input_file if line.strip()]
 
 
-def load_tokenizer() -> AutoTokenizer:
+def load_tokenizer(model_name: str) -> AutoTokenizer:
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME,
+        model_name,
         cache_dir=MODEL_CACHE_DIR,
         trust_remote_code=True,
     )
@@ -71,9 +72,9 @@ def load_tokenizer() -> AutoTokenizer:
     return tokenizer
 
 
-def load_lora_model() -> torch.nn.Module:
+def load_lora_model(model_name: str) -> torch.nn.Module:
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
+        model_name,
         cache_dir=MODEL_CACHE_DIR,
         dtype=torch.float16,
         trust_remote_code=True,
@@ -237,13 +238,14 @@ def main() -> None:
 
     device = torch.device("cuda")
     print(f"Using device: {torch.cuda.get_device_name(0)}")
+    print(f"Base model: {args.model}")
     print(f"Max steps: {args.max_steps}")
     print(f"Gradient accumulation steps: {args.gradient_accumulation_steps}")
     print(f"Max sequence length: {args.max_sequence_length}")
     print(f"Train path: {args.train_path}")
     print(f"Validation path: {args.validation_path}")
 
-    tokenizer = load_tokenizer()
+    tokenizer = load_tokenizer(args.model)
     train_examples = read_jsonl(args.train_path)
     validation_examples = read_jsonl(args.validation_path)
 
@@ -269,16 +271,20 @@ def main() -> None:
         collate_fn=lambda examples: collate_batch(tokenizer, examples),
     )
 
-    model = load_lora_model().to(device)
+    model = load_lora_model(args.model).to(device)
     model.train()
 
-    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+    trainable_parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    optimizer = AdamW(trainable_parameters, lr=args.learning_rate)
     optimizer.zero_grad(set_to_none=True)
 
     step = 0
     micro_step = 0
     running_loss = 0.0
     batches_per_epoch = math.ceil(len(train_dataset) / args.batch_size)
+    best_validation_loss = math.inf
+    best_step = None
+    final_validation_loss = None
 
     while step < args.max_steps:
         for batch in train_loader:
@@ -307,17 +313,50 @@ def main() -> None:
                         device,
                         args.validation_limit,
                     )
+                    final_validation_loss = validation_loss
                     print(f"step {step}/{args.max_steps} - validation loss: {validation_loss:.4f}")
+
+                    if validation_loss < best_validation_loss:
+                        best_validation_loss = validation_loss
+                        best_step = step
+                        args.output_dir.mkdir(parents=True, exist_ok=True)
+                        model.save_pretrained(args.output_dir)
+                        tokenizer.save_pretrained(args.output_dir)
+                        print(
+                            f"step {step}/{args.max_steps} - saved new best adapter "
+                            f"(validation loss {validation_loss:.4f})"
+                        )
 
                 if step >= args.max_steps:
                     break
 
         print(f"Completed pass over train loader ({batches_per_epoch} batches).")
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
-    print(f"Saved LoRA adapter to: {args.output_dir}")
+    training_summary = {
+        "base_model": args.model,
+        "max_steps": args.max_steps,
+        "best_step": best_step,
+        "best_validation_loss": best_validation_loss,
+        "final_validation_loss": final_validation_loss,
+        "max_sequence_length": args.max_sequence_length,
+        "learning_rate": args.learning_rate,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "peak_cuda_memory_allocated_gb": round(torch.cuda.max_memory_allocated() / (1024**3), 3),
+        "peak_cuda_memory_reserved_gb": round(torch.cuda.max_memory_reserved() / (1024**3), 3),
+    }
+    (args.output_dir / "training_summary.json").write_text(
+        json.dumps(training_summary, indent=2),
+        encoding="utf-8",
+    )
+    print(
+        f"Saved best LoRA adapter from step {best_step} to: {args.output_dir} "
+        f"(validation loss {best_validation_loss:.4f})"
+    )
+    print(
+        "Peak CUDA memory: "
+        f"{training_summary['peak_cuda_memory_allocated_gb']:.3f} GB allocated, "
+        f"{training_summary['peak_cuda_memory_reserved_gb']:.3f} GB reserved"
+    )
 
 
 if __name__ == "__main__":

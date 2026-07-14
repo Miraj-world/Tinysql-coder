@@ -5,6 +5,7 @@ PyTorch can see CUDA. It prevents starting an expensive training run blindly.
 """
 
 import json
+import argparse
 from pathlib import Path
 from statistics import mean
 
@@ -19,7 +20,15 @@ SFT_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "sft"
 TRAIN_SFT_PATH = SFT_DIR / "train_sft.jsonl"
 VALIDATION_SFT_PATH = SFT_DIR / "validation_sft.jsonl"
 
-MAX_SEQUENCE_LENGTH_CANDIDATES = [1024, 2048, 4096]
+MAX_SEQUENCE_LENGTH_CANDIDATES = [1024, 1536, 2048, 4096]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Check readiness for a LoRA training run.")
+    parser.add_argument("--model", default=MODEL_NAME)
+    parser.add_argument("--train-path", type=Path, default=TRAIN_SFT_PATH)
+    parser.add_argument("--validation-path", type=Path, default=VALIDATION_SFT_PATH)
+    return parser.parse_args()
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -89,28 +98,30 @@ def print_cuda_summary() -> None:
 
 
 def main() -> None:
-    check_file(TRAIN_SFT_PATH)
-    check_file(VALIDATION_SFT_PATH)
+    args = parse_args()
+    check_file(args.train_path)
+    check_file(args.validation_path)
 
-    train_count = count_lines(TRAIN_SFT_PATH)
-    validation_count = count_lines(VALIDATION_SFT_PATH)
+    train_count = count_lines(args.train_path)
+    validation_count = count_lines(args.validation_path)
 
     print("SFT files:")
-    print(f"  train: {train_count} examples -> {TRAIN_SFT_PATH}")
-    print(f"  validation: {validation_count} examples -> {VALIDATION_SFT_PATH}")
+    print(f"  train: {train_count} examples -> {args.train_path}")
+    print(f"  validation: {validation_count} examples -> {args.validation_path}")
     print()
 
     print_cuda_summary()
     print()
 
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME,
+        args.model,
         cache_dir=MODEL_CACHE_DIR,
         trust_remote_code=True,
     )
 
-    train_examples = read_jsonl(TRAIN_SFT_PATH)
-    validation_examples = read_jsonl(VALIDATION_SFT_PATH)
+    print(f"Model: {args.model}")
+    train_examples = read_jsonl(args.train_path)
+    validation_examples = read_jsonl(args.validation_path)
     lengths = token_lengths(tokenizer, train_examples + validation_examples)
     print_token_length_summary(lengths)
 

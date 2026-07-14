@@ -25,6 +25,7 @@ Run 009 + repair accuracy:        29/100
 Run 009 + repair SQL executable:  75/100
 Automated tests:                  23 passing
 Default branch:                   main
+Run 010 direction:                Qwen2.5-Coder-1.5B
 ```
 
 The full benchmark and interpretation are documented in
@@ -71,6 +72,7 @@ Done so far:
 37. Added guarded unqualified-column, undeclared-alias, foreign-key join, and exact syntax repairs.
 38. Trained Run 009 for 160 steps on the clean V6 recipe and reached the best raw execution score.
 39. Expanded evaluation to all 100 validation examples with per-query SQLite timeouts.
+40. Pivoted Run 010 to Qwen2.5-Coder-1.5B and passed a local LoRA smoke run on the 8 GB GPU.
 
 Latest high-level result:
 
@@ -580,7 +582,8 @@ heuristics. The current proposed milestone is:
 at least 50/100 execution matches after repair
 ```
 
-The remaining architecture decision is whether Run 010 must keep the 0.5B base
-model or may move to Qwen2.5-Coder-1.5B with a memory-efficient training setup
-for the 8 GB GPU. See [Eval 014](docs/eval-014-lora-run-009-full-validation.md)
-for the evidence behind this decision.
+Run 010 will move to Qwen2.5-Coder-1.5B with a memory-efficient LoRA setup for
+the 8 GB GPU. The 0.5B model reached a useful research milestone but did not
+have sufficient semantic accuracy. See
+[Model Capacity Decision 001](docs/model-capacity-decision-001.md) for the
+evidence, controlled recipe, and success thresholds.
