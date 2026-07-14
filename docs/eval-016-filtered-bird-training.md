@@ -109,4 +109,3 @@ The next justified direction is either:
 
 Repeating more 1.5B steps on the same compact prompts is not justified by these
 results.
-

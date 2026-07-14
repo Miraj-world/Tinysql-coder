@@ -86,4 +86,3 @@ laptop experiment. Their documented recipe uses:
 
 This project tested the most practical data improvement that fits locally. It
 did not reproduce the full published system.
-
