@@ -122,3 +122,10 @@ more mechanical:
 improve post-generation repair for obvious syntax/alias issues, or
 build a focused error-set evaluation around the remaining wrong-table cases
 ```
+
+## Follow-up
+
+These recommendations were completed in the later guarded repair experiments.
+The project then returned to the cleaner V6 recipe and trained Run 009 for 160
+steps. The current full-validation result is 22/100 raw and 29/100 after repair;
+see [Eval 014](eval-014-lora-run-009-full-validation.md).

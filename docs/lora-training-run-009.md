@@ -60,3 +60,9 @@ models/tinysql-coder-lora-run-009
 
 The adapter is a local ignored artifact. Its held-out execution result is
 documented in [Eval 013](eval-013-lora-run-009.md).
+
+## Follow-up
+
+Run 009 was subsequently evaluated across all 100 held-out validation examples.
+See [Eval 014](eval-014-lora-run-009-full-validation.md) for the current
+22/100 raw and 29/100 repaired execution results.

@@ -1,7 +1,8 @@
 # TinySQL-coder
 
 TinySQL-coder is a learning-first text-to-SQL fine-tuning project using the
-BIRD mini-dev dataset.
+BIRD mini-dev dataset, Qwen2.5-Coder, LoRA, execution-based evaluation, and a
+guarded post-generation SQL repair pipeline.
 
 Important clarification: **BIRD does not mean bird images here**. BIRD is a
 database question-answering benchmark. Each example contains a natural-language
@@ -14,6 +15,20 @@ database schema + question + evidence -> SQL query
 ```
 
 ## Current Status
+
+Current verified snapshot (2026-07-14):
+
+```text
+Best raw adapter:                  LoRA Run 009
+Run 009 raw execution accuracy:   22/100
+Run 009 + repair accuracy:        29/100
+Run 009 + repair SQL executable:  75/100
+Automated tests:                  23 passing
+Default branch:                   main
+```
+
+The full benchmark and interpretation are documented in
+[Eval 014](docs/eval-014-lora-run-009-full-validation.md).
 
 Done so far:
 
@@ -143,11 +158,14 @@ step 160. Run 009 + repair reached 6/20.
 |       +-- schema/
 |       +-- processed/
 |       +-- sft/
+|       +-- sft_v6/
+|       +-- sft_v7/
 +-- docs/                         experiment journals and notes
 +-- models/                       local only, ignored by Git
 |   +-- huggingface/
 |   +-- lora-smoke-test/
 |   +-- tinysql-coder-lora-run-001/
+|   +-- tinysql-coder-lora-run-009/
 +-- notebooks/
 |   +-- 001-data-exploration.ipynb
 |   +-- 002-inspect-qwen-model.ipynb
@@ -163,6 +181,7 @@ step 160. Run 009 + repair reached 6/20.
 |   +-- prepare_sft_data_v4.py
 |   +-- prepare_sft_data_v5.py
 |   +-- prepare_sft_data_v6.py
+|   +-- prepare_sft_data_v7.py
 |   +-- create_baseline_eval_set.py
 |   +-- run_baseline_model.py
 |   +-- evaluate_sql_execution.py
@@ -173,6 +192,7 @@ step 160. Run 009 + repair reached 6/20.
 |   +-- check_training_readiness.py
 |   +-- train_lora_smoke_test.py
 |   +-- train_lora.py
++-- tests/                        repair, evaluation, and sampling tests
 +-- requirements.txt
 +-- README.md
 ```
@@ -531,35 +551,36 @@ docs/eval-011-lora-run-007.md
 docs/sft-v7-source-table-supervision.md
 docs/lora-training-run-008.md
 docs/eval-012-lora-run-008.md
+docs/sql-repair-unqualified-column-001.md
+docs/sql-repair-undeclared-alias-001.md
+docs/sql-repair-unqualified-join-001.md
+docs/sql-repair-syntax-fragment-001.md
+docs/lora-training-run-009.md
+docs/eval-013-lora-run-009.md
+docs/eval-014-lora-run-009-full-validation.md
 ```
 
 ## Next Step
 
-The next useful project step is a smaller post-generation repair, not another
-pre-SQL label format. The focused error-set evaluation is now built.
-
-Current evidence points to remaining value and schema-grounding issues:
-
-```text
-wrong table for a column
-invented plausible column
-wrong fact table
-SQL executes but returns the wrong rows
-```
-
-Alias repair, join repair, semantic lookup repair, and value canonicalization
-together improved Run 004 from 3/20 to 6/20 execution matches. Join pruning and
-DISTINCT repair improved it again to 7/20. V6 planning supervision alone did
-not improve raw execution accuracy. Cleaner schema guidance did help Run 007,
-raising raw execution matches to 4/20 and repaired matches to 6/20. SFT V7
-source-table labels hurt Run 008, which fell to 2/20 raw and 3/20 after repair.
-
-The next improvement should be mechanical and narrow:
+The repair experiments are complete for the currently justified mechanical
+rules. They made many more predictions executable, but the full benchmark shows
+that semantic reasoning is now the larger bottleneck:
 
 ```text
-repair obvious syntax fragments
-repair alias references when the correct table is already present
-repair unqualified columns when exactly one joined table owns the column
+46/100 predictions execute but return the wrong rows
+10/100 use an invented column
+7/100 put a real column on the wrong table
+3/100 contain an ambiguous or unqualified column
 ```
 
-The best overall system remains Run 004 plus repair at 7/20 execution matches.
+Run 010 should target semantic accuracy rather than add speculative repair
+heuristics. The current proposed milestone is:
+
+```text
+at least 50/100 execution matches after repair
+```
+
+The remaining architecture decision is whether Run 010 must keep the 0.5B base
+model or may move to Qwen2.5-Coder-1.5B with a memory-efficient training setup
+for the 8 GB GPU. See [Eval 014](docs/eval-014-lora-run-009-full-validation.md)
+for the evidence behind this decision.

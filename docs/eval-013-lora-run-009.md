@@ -58,3 +58,10 @@ However, the gain was not uniform. Run 009 forgot one previously correct hard
 example, and its repaired score did not exceed Run 004. The next training
 improvement should preserve the best checkpoint during training and stop based
 on validation behavior instead of saving only the final requested step.
+
+## Follow-up
+
+This 20-question comparison remains useful for continuity with earlier runs,
+but it is no longer the primary headline. The later full validation benchmark
+measured Run 009 at 22/100 raw execution matches and 29/100 after repair. See
+[Eval 014](eval-014-lora-run-009-full-validation.md).

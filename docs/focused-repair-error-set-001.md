@@ -65,3 +65,12 @@ the correct alias and rerun evaluation.
 
 That is safer than trying to repair invented columns, because invented-column
 examples often require changing the whole query plan.
+
+## Follow-up
+
+The focused set led to four guarded experiments covering unqualified columns,
+undeclared aliases, missing-table foreign-key joins, and one exact syntax
+fragment. Those rules improved executability but did not raise the best
+20-question execution-match score. The project then returned to training and
+produced Run 009. Current results are summarized in
+[Eval 014](eval-014-lora-run-009-full-validation.md).

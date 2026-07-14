@@ -62,3 +62,11 @@ at 7/20.
 The recent bottleneck is semantic rather than syntactic. The next major step
 should return to model or training-data improvement, using the focused error
 set as evidence, rather than adding increasingly speculative repair rules.
+
+## Follow-up
+
+That decision produced LoRA Run 009. On the full 100-example benchmark, Run 009
+plus repair reached 29/100 execution matches and made 75/100 predictions
+executable. The remaining dominant category is executable SQL that returns the
+wrong rows, confirming that semantic accuracy—not syntax—is now the main
+bottleneck. See [Eval 014](eval-014-lora-run-009-full-validation.md).

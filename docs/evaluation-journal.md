@@ -4,6 +4,17 @@ This folder records model evaluation results, setup checkpoints, failures, lesso
 
 Raw generated artifacts live under `outputs/`. These markdown files are for human interpretation.
 
+## Current Snapshot
+
+As of 2026-07-14, LoRA Run 009 is the best raw adapter. On the full 100-example
+validation benchmark it reached 22/100 execution matches, while the guarded
+repair stack raised the end-to-end result to 29/100 and made 75/100 predictions
+executable. The current evidence and Run 010 decision are in
+[Eval 014](eval-014-lora-run-009-full-validation.md).
+
+Historical “Next Step” sections below record what was learned at that point in
+the project; later entries supersede them rather than rewriting the history.
+
 ## Entries
 
 | Date | Entry | File |
