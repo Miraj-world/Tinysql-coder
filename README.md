@@ -52,6 +52,7 @@ Done so far:
 33. Improved schema guidance join hints to prefer real foreign keys.
 34. Trained and evaluated LoRA Run 007.
 35. Created SFT V7 with source-table supervision and evaluated LoRA Run 008.
+36. Built a focused repair error set across the strongest repaired runs.
 
 Latest high-level result:
 
@@ -103,7 +104,12 @@ SELECT ...
 Run 006 learned the format in training, but scored 3/20 execution matches. Its
 repair pass increased executable SQL from 7/20 to 10/20, but execution matches
 stayed 3/20. Cleaning schema guidance join hints improved Run 007 to 4/20 raw
-execution matches and 6/20 after repair.
+execution matches and 6/20 after repair. SFT V7 source-table supervision hurt
+Run 008, so the next useful work shifted back to small post-generation repair
+experiments. The focused repair error set found 30 mechanically interesting
+remaining failures across repaired Runs 004, 007, and 008: 12 wrong-table
+column references, 7 invented columns, 6 ambiguous or unqualified columns,
+4 other execution errors, and 1 hallucinated table.
 
 ## Project Structure
 
@@ -141,6 +147,7 @@ execution matches and 6/20 after repair.
 |   +-- evaluate_sql_execution.py
 |   +-- compare_eval_runs.py
 |   +-- analyze_failure_patterns.py
+|   +-- create_focused_error_set.py
 |   +-- repair_sql_predictions.py
 |   +-- check_training_readiness.py
 |   +-- train_lora_smoke_test.py
@@ -500,8 +507,8 @@ docs/eval-012-lora-run-008.md
 
 ## Next Step
 
-The next useful project step is a smaller post-generation repair or focused
-error-set evaluation, not another pre-SQL label format.
+The next useful project step is a smaller post-generation repair, not another
+pre-SQL label format. The focused error-set evaluation is now built.
 
 Current evidence points to remaining value and schema-grounding issues:
 
@@ -524,7 +531,7 @@ The next improvement should be mechanical and narrow:
 ```text
 repair obvious syntax fragments
 repair alias references when the correct table is already present
-build a focused mini-eval over remaining wrong-table failures
+repair unqualified columns when exactly one joined table owns the column
 ```
 
 The best overall system remains Run 004 plus repair at 7/20 execution matches.

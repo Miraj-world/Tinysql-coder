@@ -55,3 +55,4 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-13 | SFT V7 Source-Table Supervision | [sft-v7-source-table-supervision.md](sft-v7-source-table-supervision.md) |
 | 2026-07-13 | LoRA Training Run 008 | [lora-training-run-008.md](lora-training-run-008.md) |
 | 2026-07-13 | LoRA Run 008 Eval 012 | [eval-012-lora-run-008.md](eval-012-lora-run-008.md) |
+| 2026-07-14 | Focused Repair Error Set 001 | [focused-repair-error-set-001.md](focused-repair-error-set-001.md) |
