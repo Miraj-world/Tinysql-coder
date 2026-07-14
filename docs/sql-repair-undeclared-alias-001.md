@@ -87,3 +87,6 @@ that is missing from a flat query. Before adding a table, the repair must find
 exactly one direct foreign-key join from an existing table. This resembles the
 existing qualified-column join repair and can be extended to bare columns
 without guessing across nested scopes.
+
+This candidate was implemented and evaluated in
+[SQL Repair Experiment 009](sql-repair-unqualified-join-001.md).

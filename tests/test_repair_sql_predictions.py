@@ -10,12 +10,18 @@ if str(PROJECT_ROOT) not in sys.path:
 from scripts.repair_sql_predictions import (
     undeclared_alias_repair_for_error,
     unqualified_column_repair_for_error,
+    unqualified_join_repair_for_error,
 )
 
 
 SCHEMA = {
     "players": {"id", "height", "name"},
     "stats": {"id", "score"},
+}
+
+DATABASE_INFO = {
+    "schema": SCHEMA,
+    "foreign_keys": [("stats", "player_id", "players", "id")],
 }
 
 
@@ -125,6 +131,67 @@ class UndeclaredAliasRepairTests(unittest.TestCase):
 
         self.assertIsNone(
             undeclared_alias_repair_for_error(sql, "no such column: p.score", SCHEMA)
+        )
+
+
+class UnqualifiedJoinRepairTests(unittest.TestCase):
+    def test_adds_unique_missing_owner_through_direct_foreign_key(self):
+        sql = "SELECT AVG(score) FROM stats AS s WHERE height > 180"
+
+        repair = unqualified_join_repair_for_error(
+            sql,
+            "no such column: height",
+            DATABASE_INFO,
+        )
+
+        self.assertEqual(
+            repair,
+            (
+                "SELECT AVG(score) FROM stats AS s "
+                "INNER JOIN players AS T1 ON s.player_id = T1.id WHERE T1.height > 180",
+                "added players AS T1 ON s.player_id = T1.id; height -> T1.height",
+            ),
+        )
+
+    def test_rejects_column_already_owned_in_query(self):
+        sql = "SELECT score FROM stats AS s WHERE height > 180"
+        info = {
+            "schema": {**SCHEMA, "stats": {"id", "score", "height"}},
+            "foreign_keys": DATABASE_INFO["foreign_keys"],
+        }
+
+        self.assertIsNone(
+            unqualified_join_repair_for_error(sql, "no such column: height", info)
+        )
+
+    def test_rejects_column_with_multiple_database_owners(self):
+        sql = "SELECT score FROM stats AS s WHERE height > 180"
+        info = {
+            "schema": {**SCHEMA, "teams": {"id", "height"}},
+            "foreign_keys": DATABASE_INFO["foreign_keys"],
+        }
+
+        self.assertIsNone(
+            unqualified_join_repair_for_error(sql, "no such column: height", info)
+        )
+
+    def test_rejects_missing_owner_without_unique_foreign_key(self):
+        sql = "SELECT score FROM stats AS s WHERE height > 180"
+        info = {"schema": SCHEMA, "foreign_keys": []}
+
+        self.assertIsNone(
+            unqualified_join_repair_for_error(sql, "no such column: height", info)
+        )
+
+    def test_rejects_nested_query(self):
+        sql = "SELECT score FROM (SELECT score FROM stats WHERE height > 180) AS s"
+
+        self.assertIsNone(
+            unqualified_join_repair_for_error(
+                sql,
+                "no such column: height",
+                DATABASE_INFO,
+            )
         )
 
 

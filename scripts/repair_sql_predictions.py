@@ -18,6 +18,8 @@ This is a post-generation experiment. It makes conservative layered repairs:
    exactly one table already in the query owns it.
 9. Undeclared-alias repair: a flat query uses an alias that was never declared,
    and exactly one table already in the query owns the referenced column.
+10. Bare-column join repair: a flat query uses a bare column whose sole owner
+    table is missing, with exactly one direct foreign-key join available.
 """
 
 import argparse
@@ -583,6 +585,56 @@ def join_repair_for_error(sql: str, error: str, database_info: dict) -> tuple[st
     return repaired_sql, note, bad_alias, new_alias
 
 
+def unqualified_join_repair_for_error(
+    sql: str,
+    error: str,
+    database_info: dict,
+) -> tuple[str, str] | None:
+    """Join the unique missing owner of a bare column through one proven FK."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is not None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if not aliases:
+        return None
+
+    schema = database_info["schema"]
+    if build_owner_aliases(schema, aliases).get(column):
+        return None
+
+    owner_tables = owner_tables_for_column(schema, column)
+    if len(owner_tables) != 1:
+        return None
+
+    missing_table = owner_tables[0]
+    join = find_direct_join(aliases, missing_table, database_info["foreign_keys"])
+    if join is None:
+        return None
+
+    existing_alias, existing_column, missing_column, _ = join
+    new_alias = next_table_alias(aliases)
+    join_clause = (
+        f"INNER JOIN {missing_table} AS {new_alias} "
+        f"ON {existing_alias}.{existing_column} = {new_alias}.{missing_column}"
+    )
+    repaired_sql = insert_join(sql, join_clause)
+    repaired_sql = replace_unqualified_column(repaired_sql, column, new_alias)
+    note = (
+        f"added {missing_table} AS {new_alias} "
+        f"ON {existing_alias}.{existing_column} = {new_alias}.{missing_column}; "
+        f"{column} -> {new_alias}.{column}"
+    )
+    return repaired_sql, note
+
+
 def lookup_repair_for_sql(db_id: str, sql: str, database_info: dict) -> tuple[str, str] | None:
     if has_nested_select(sql):
         return None
@@ -753,6 +805,21 @@ def repair_sql(
             if unqualified_repair is not None:
                 next_sql, owner_alias, column = unqualified_repair
                 repair_notes.append(f"{column} -> {owner_alias}.{column}")
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
+            unqualified_join_repair = None
+            if enable_join_repair:
+                unqualified_join_repair = unqualified_join_repair_for_error(
+                    repaired_sql,
+                    result["error"],
+                    database_info,
+                )
+            if unqualified_join_repair is not None:
+                next_sql, note = unqualified_join_repair
+                repair_notes.append(note)
                 if next_sql == repaired_sql:
                     break
                 repaired_sql = next_sql
