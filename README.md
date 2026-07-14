@@ -55,6 +55,7 @@ Done so far:
 36. Built a focused repair error set across the strongest repaired runs.
 37. Added guarded unqualified-column, undeclared-alias, foreign-key join, and exact syntax repairs.
 38. Trained Run 009 for 160 steps on the clean V6 recipe and reached the best raw execution score.
+39. Expanded evaluation to all 100 validation examples with per-query SQLite timeouts.
 
 Latest high-level result:
 
@@ -79,6 +80,15 @@ Run 006 + repair matches:          3/20
 Run 007 + repair matches:          6/20
 Run 008 + repair matches:          3/20
 Run 009 + repair matches:          6/20
+```
+
+Run 009 on the full 100-example validation benchmark:
+
+```text
+Run 009 raw execution matches:     22/100
+Run 009 + repair matches:          29/100
+Run 009 raw SQL executed:          49/100
+Run 009 + repair SQL executed:     75/100
 ```
 
 The training pipeline works. Run 009 is the best raw model at 5/20, while Run
