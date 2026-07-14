@@ -19,11 +19,12 @@ database schema + question + evidence -> SQL query
 Current verified snapshot (2026-07-14):
 
 ```text
-Best raw adapter:                  LoRA Run 009
-Run 009 raw execution accuracy:   22/100
-Run 009 + repair accuracy:        29/100
-Run 009 + repair SQL executable:  75/100
-Automated tests:                  23 passing
+Best raw adapter:                  LoRA Run 010 (Qwen 1.5B)
+Run 010 raw execution accuracy:   26/100
+Best single-adapter + repair:     Run 009 at 29/100
+Run 009 -> Run 010 cascade:       35/100
+Cascade SQL executable:           92/100
+Automated tests:                  27 passing
 Default branch:                   main
 Run 010 direction:                Qwen2.5-Coder-1.5B
 ```
@@ -73,6 +74,8 @@ Done so far:
 38. Trained Run 009 for 160 steps on the clean V6 recipe and reached the best raw execution score.
 39. Expanded evaluation to all 100 validation examples with per-query SQLite timeouts.
 40. Pivoted Run 010 to Qwen2.5-Coder-1.5B and passed a local LoRA smoke run on the 8 GB GPU.
+41. Trained and evaluated the 1.5B Run 010 adapter on all 100 held-out examples.
+42. Added an execution-fallback cascade and reached the best result at 35/100.
 
 Latest high-level result:
 
@@ -106,6 +109,10 @@ Run 009 raw execution matches:     22/100
 Run 009 + repair matches:          29/100
 Run 009 raw SQL executed:          49/100
 Run 009 + repair SQL executed:     75/100
+Run 010 raw execution matches:     26/100
+Run 010 + repair matches:          28/100
+Run 009 -> Run 010 cascade:        35/100
+Cascade SQL executed:              92/100
 ```
 
 The training pipeline works. Run 009 is the best raw model at 5/20, while Run
@@ -191,6 +198,7 @@ step 160. Run 009 + repair reached 6/20.
 |   +-- analyze_failure_patterns.py
 |   +-- create_focused_error_set.py
 |   +-- repair_sql_predictions.py
+|   +-- cascade_sql_predictions.py
 |   +-- check_training_readiness.py
 |   +-- train_lora_smoke_test.py
 |   +-- train_lora.py
@@ -560,6 +568,9 @@ docs/sql-repair-syntax-fragment-001.md
 docs/lora-training-run-009.md
 docs/eval-013-lora-run-009.md
 docs/eval-014-lora-run-009-full-validation.md
+docs/model-capacity-decision-001.md
+docs/lora-training-run-010.md
+docs/eval-015-lora-run-010.md
 ```
 
 ## Next Step
@@ -569,21 +580,21 @@ rules. They made many more predictions executable, but the full benchmark shows
 that semantic reasoning is now the larger bottleneck:
 
 ```text
-46/100 predictions execute but return the wrong rows
-10/100 use an invented column
-7/100 put a real column on the wrong table
-3/100 contain an ambiguous or unqualified column
+57/100 cascade predictions execute but return the wrong rows
+5/100 put a real column on the wrong table
+2/100 contain an ambiguous or unqualified column
+1/100 has another execution error
 ```
 
-Run 010 should target semantic accuracy rather than add speculative repair
-heuristics. The current proposed milestone is:
+The project milestone remains:
 
 ```text
 at least 50/100 execution matches after repair
 ```
 
-Run 010 will move to Qwen2.5-Coder-1.5B with a memory-efficient LoRA setup for
-the 8 GB GPU. The 0.5B model reached a useful research milestone but did not
-have sufficient semantic accuracy. See
-[Model Capacity Decision 001](docs/model-capacity-decision-001.md) for the
-evidence, controlled recipe, and success thresholds.
+Run 010 successfully moved to Qwen2.5-Coder-1.5B and improved raw accuracy. The
+best end-to-end result now uses repaired Run 009 as primary and repaired Run 010
+as an execution fallback, reaching 35/100. This remains below the 50/100
+milestone. The next step is diverse, verified semantic training data built from
+the executable wrong-result cases, not more repetition of the same 400 unique
+questions. See [Eval 015](docs/eval-015-lora-run-010.md).

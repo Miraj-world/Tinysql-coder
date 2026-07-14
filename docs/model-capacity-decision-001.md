@@ -109,3 +109,10 @@ longer-term usable target:    80/100 or better
 If 1.5B improves accuracy but remains below 50/100, the next step should focus
 on adding diverse, verified semantic training examples rather than repeating
 the same 400 questions for more epochs.
+
+## Outcome
+
+Run 010 improved raw execution accuracy from 22/100 to 26/100. Its repaired
+score was 28/100, but an execution-fallback cascade using repaired Run 009 as
+primary and repaired Run 010 as fallback reached 35/100. The 50/100 milestone
+was not met. Full results are in [Eval 015](eval-015-lora-run-010.md).

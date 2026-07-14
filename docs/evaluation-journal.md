@@ -6,13 +6,13 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 
 ## Current Snapshot
 
-As of 2026-07-14, LoRA Run 009 is the best raw adapter. On the full 100-example
-validation benchmark it reached 22/100 execution matches, while the guarded
-repair stack raised the end-to-end result to 29/100 and made 75/100 predictions
-executable. The current evidence and Run 010 decision are in
-[Eval 014](eval-014-lora-run-009-full-validation.md).
+As of 2026-07-14, the 1.5B LoRA Run 010 is the best raw adapter at 26/100
+execution matches. The best end-to-end system uses repaired Run 009 as primary
+and repaired Run 010 only when the primary SQL fails to execute. This cascade
+reached 35/100 execution matches and made 92/100 predictions executable. The
+current evidence is in [Eval 015](eval-015-lora-run-010.md).
 
-Historical “Next Step” sections below record what was learned at that point in
+Historical "Next Step" sections below record what was learned at that point in
 the project; later entries supersede them rather than rewriting the history.
 
 ## Entries
@@ -75,3 +75,5 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | LoRA Run 009 Eval 013 | [eval-013-lora-run-009.md](eval-013-lora-run-009.md) |
 | 2026-07-14 | Run 009 Full Validation Eval 014 | [eval-014-lora-run-009-full-validation.md](eval-014-lora-run-009-full-validation.md) |
 | 2026-07-14 | Model Capacity Decision 001 | [model-capacity-decision-001.md](model-capacity-decision-001.md) |
+| 2026-07-14 | LoRA Training Run 010 | [lora-training-run-010.md](lora-training-run-010.md) |
+| 2026-07-14 | Run 010 and Cascade Eval 015 | [eval-015-lora-run-010.md](eval-015-lora-run-010.md) |
