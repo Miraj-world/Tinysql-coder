@@ -24,13 +24,17 @@ Run 010 raw execution accuracy:   26/100
 Best single-adapter + repair:     Run 009 at 29/100
 Run 009 -> Run 010 cascade:       35/100
 Cascade SQL executable:           92/100
-Automated tests:                  27 passing
+Automated tests:                  38 passing
 Default branch:                   main
 Run 010 direction:                Qwen2.5-Coder-1.5B
 ```
 
-The full benchmark and interpretation are documented in
-[Eval 014](docs/eval-014-lora-run-009-full-validation.md).
+Runs 011 and 012 tested the official filtered BIRD training rows. Run 012
+reached 20/100 raw and 27/100 after repair, so Run 010 and the 35/100 cascade
+remain the verified best systems. Automated tests now total 38 passing.
+
+The latest full benchmark and interpretation are documented in
+[Eval 016](docs/eval-016-filtered-bird-training.md).
 
 Done so far:
 
@@ -76,6 +80,10 @@ Done so far:
 40. Pivoted Run 010 to Qwen2.5-Coder-1.5B and passed a local LoRA smoke run on the 8 GB GPU.
 41. Trained and evaluated the 1.5B Run 010 adapter on all 100 held-out examples.
 42. Added an execution-fallback cascade and reached the best result at 35/100.
+43. Replaced repeated 400-question training with 6,601 curated BIRD training rows.
+44. Added database-disjoint validation and exact mini-dev leakage checks.
+45. Trained Run 011 on direct SQL targets, then measured join-context failures.
+46. Continued Run 012 with aligned foreign-key guidance and reached 27/100 after repair.
 
 Latest high-level result:
 
@@ -113,6 +121,13 @@ Run 010 raw execution matches:     26/100
 Run 010 + repair matches:          28/100
 Run 009 -> Run 010 cascade:        35/100
 Cascade SQL executed:              92/100
+Run 011 raw execution matches:     13/100
+Run 011 + repair matches:          19/100
+Run 011 + guided repair matches:   24/100
+Run 012 raw execution matches:     20/100
+Run 012 + repair matches:          27/100
+Three-model cascade matches:       35/100
+Three-model cascade SQL executed:  96/100
 ```
 
 The training pipeline works. Run 009 is the best raw model at 5/20, while Run
@@ -571,6 +586,8 @@ docs/eval-014-lora-run-009-full-validation.md
 docs/model-capacity-decision-001.md
 docs/lora-training-run-010.md
 docs/eval-015-lora-run-010.md
+docs/filtered-bird-training-pivot.md
+docs/eval-016-filtered-bird-training.md
 ```
 
 ## Next Step
@@ -592,9 +609,10 @@ The project milestone remains:
 at least 50/100 execution matches after repair
 ```
 
-Run 010 successfully moved to Qwen2.5-Coder-1.5B and improved raw accuracy. The
-best end-to-end result now uses repaired Run 009 as primary and repaired Run 010
-as an execution fallback, reaching 35/100. This remains below the 50/100
-milestone. The next step is diverse, verified semantic training data built from
-the executable wrong-result cases, not more repetition of the same 400 unique
-questions. See [Eval 015](docs/eval-015-lora-run-010.md).
+Runs 011 and 012 completed the diverse-data experiment using 6,601 curated BIRD
+training rows with database-disjoint validation and zero exact mini-dev question
+overlap. Relationship-aligned continuation improved Run 012 to 27/100 after
+repair, but it did not beat the existing best adapters or the 35/100 cascade.
+The next justified experiment needs more than additional 1.5B steps: use a
+stronger 3B QLoRA model with database-value retrieval, or train a selector on a
+separate validation set. See [Eval 016](docs/eval-016-filtered-bird-training.md).

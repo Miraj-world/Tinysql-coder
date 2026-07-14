@@ -13,7 +13,7 @@ import random
 from pathlib import Path
 
 import torch
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, PeftModel, get_peft_model
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -44,6 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-path", type=Path, default=TRAIN_SFT_PATH)
     parser.add_argument("--validation-path", type=Path, default=VALIDATION_SFT_PATH)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument(
+        "--initial-adapter-path",
+        type=Path,
+        default=None,
+        help="Continue training from an existing LoRA adapter instead of creating a new one.",
+    )
     return parser.parse_args()
 
 
@@ -72,7 +78,7 @@ def load_tokenizer(model_name: str) -> AutoTokenizer:
     return tokenizer
 
 
-def load_lora_model(model_name: str) -> torch.nn.Module:
+def load_lora_model(model_name: str, initial_adapter_path: Path | None = None) -> torch.nn.Module:
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         cache_dir=MODEL_CACHE_DIR,
@@ -84,6 +90,13 @@ def load_lora_model(model_name: str) -> torch.nn.Module:
     # little slower, but that is a good tradeoff on a laptop GPU.
     model.gradient_checkpointing_enable()
     model.config.use_cache = False
+
+    if initial_adapter_path is not None:
+        if not initial_adapter_path.exists():
+            raise FileNotFoundError(f"Initial LoRA adapter not found: {initial_adapter_path}")
+        model = PeftModel.from_pretrained(model, initial_adapter_path, is_trainable=True)
+        model.print_trainable_parameters()
+        return model
 
     lora_config = LoraConfig(
         r=8,
@@ -244,6 +257,7 @@ def main() -> None:
     print(f"Max sequence length: {args.max_sequence_length}")
     print(f"Train path: {args.train_path}")
     print(f"Validation path: {args.validation_path}")
+    print(f"Initial adapter: {args.initial_adapter_path if args.initial_adapter_path else 'none'}")
 
     tokenizer = load_tokenizer(args.model)
     train_examples = read_jsonl(args.train_path)
@@ -271,7 +285,7 @@ def main() -> None:
         collate_fn=lambda examples: collate_batch(tokenizer, examples),
     )
 
-    model = load_lora_model(args.model).to(device)
+    model = load_lora_model(args.model, args.initial_adapter_path).to(device)
     model.train()
 
     trainable_parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -341,6 +355,7 @@ def main() -> None:
         "max_sequence_length": args.max_sequence_length,
         "learning_rate": args.learning_rate,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "initial_adapter_path": str(args.initial_adapter_path) if args.initial_adapter_path else None,
         "peak_cuda_memory_allocated_gb": round(torch.cuda.max_memory_allocated() / (1024**3), 3),
         "peak_cuda_memory_reserved_gb": round(torch.cuda.max_memory_reserved() / (1024**3), 3),
     }

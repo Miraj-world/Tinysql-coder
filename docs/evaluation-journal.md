@@ -12,6 +12,12 @@ and repaired Run 010 only when the primary SQL fails to execute. This cascade
 reached 35/100 execution matches and made 92/100 predictions executable. The
 current evidence is in [Eval 015](eval-015-lora-run-010.md).
 
+Runs 011 and 012 then tested 6,601 curated BIRD training pairs. Relationship-
+aligned Run 012 reached 20/100 raw and 27/100 after repair, while a three-model
+fallback made 96/100 SQL predictions executable but remained at 35/100 correct.
+The best-system decision therefore did not change. See
+[Eval 016](eval-016-filtered-bird-training.md).
+
 Historical "Next Step" sections below record what was learned at that point in
 the project; later entries supersede them rather than rewriting the history.
 
@@ -77,3 +83,5 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | Model Capacity Decision 001 | [model-capacity-decision-001.md](model-capacity-decision-001.md) |
 | 2026-07-14 | LoRA Training Run 010 | [lora-training-run-010.md](lora-training-run-010.md) |
 | 2026-07-14 | Run 010 and Cascade Eval 015 | [eval-015-lora-run-010.md](eval-015-lora-run-010.md) |
+| 2026-07-14 | Filtered BIRD Training Pivot | [filtered-bird-training-pivot.md](filtered-bird-training-pivot.md) |
+| 2026-07-14 | Filtered BIRD Runs 011/012 Eval 016 | [eval-016-filtered-bird-training.md](eval-016-filtered-bird-training.md) |

@@ -8,7 +8,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.create_baseline_eval_set import choose_balanced_sample
+from scripts.create_baseline_eval_set import (
+    build_direct_guided_prompt,
+    build_direct_join_prompt,
+    build_direct_sql_prompt,
+    choose_balanced_sample,
+)
 
 
 def example(question_id: int, difficulty: str) -> dict:
@@ -46,6 +51,54 @@ class BalancedEvalSampleTests(unittest.TestCase):
         second = choose_balanced_sample(self.examples, sample_size=7)
 
         self.assertEqual(first, second)
+
+
+class DirectSqlPromptTests(unittest.TestCase):
+    def test_prompt_has_no_planning_scaffolding(self):
+        record = {
+            "instruction": "Convert the question to SQL.",
+            "input": "Schema: orders(id)\nQuestion: List orders.",
+        }
+
+        prompt = build_direct_sql_prompt(record)
+
+        self.assertIn("Schema: orders(id)", prompt)
+        self.assertTrue(prompt.endswith("Return only the SQL query."))
+        self.assertNotIn("PLAN_TYPE", prompt)
+        self.assertNotIn("FINAL_SQL", prompt)
+
+    def test_guided_prompt_adds_relationships_without_planning_labels(self):
+        record = {
+            "instruction": "Convert the question to SQL.",
+            "input": "Schema: orders(customer_id)\nQuestion: List orders.",
+            "metadata": {"db_id": "shop"},
+        }
+
+        prompt = build_direct_guided_prompt(
+            record,
+            {"shop": "Possible join keys:\norders.customer_id = customers.id"},
+        )
+
+        self.assertIn("orders.customer_id = customers.id", prompt)
+        self.assertTrue(prompt.endswith("Return only the SQL query."))
+        self.assertNotIn("PLAN_TYPE", prompt)
+        self.assertNotIn("FINAL_SQL", prompt)
+
+    def test_join_prompt_does_not_duplicate_column_ownership(self):
+        record = {
+            "instruction": "Convert the question to SQL.",
+            "input": "Schema: orders(customer_id)\nQuestion: List orders.",
+            "metadata": {"db_id": "shop"},
+        }
+        guidance = {
+            "shop": "Column ownership:\norders: customer_id\n\n"
+            "Possible join keys:\norders.customer_id = customers.id"
+        }
+
+        prompt = build_direct_join_prompt(record, guidance)
+
+        self.assertIn("orders.customer_id = customers.id", prompt)
+        self.assertNotIn("orders: customer_id", prompt)
 
 
 if __name__ == "__main__":

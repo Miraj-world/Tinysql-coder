@@ -73,6 +73,55 @@ def build_prompt(example: dict) -> str:
     )
 
 
+def build_direct_sql_prompt(example: dict) -> str:
+    """Match V8's plain-SQL training format without planning scaffolding."""
+    return "\n\n".join(
+        [
+            example["instruction"],
+            example["input"],
+            "Return only the SQL query.",
+        ]
+    )
+
+
+def build_direct_guided_prompt(example: dict, schema_guidance_by_db: dict[str, str]) -> str:
+    """Use V8's direct output format plus verified schema relationships."""
+    db_id = example["metadata"]["db_id"]
+    schema_guidance = schema_guidance_by_db.get(db_id)
+    if schema_guidance is None:
+        raise KeyError(f"No schema guidance found for db_id: {db_id}")
+
+    return "\n\n".join(
+        [
+            example["instruction"],
+            "Schema guidance:",
+            schema_guidance,
+            example["input"],
+            "Return only the SQL query.",
+        ]
+    )
+
+
+def build_direct_join_prompt(example: dict, schema_guidance_by_db: dict[str, str]) -> str:
+    """Match V9 by adding only verified foreign-key relationships."""
+    db_id = example["metadata"]["db_id"]
+    schema_guidance = schema_guidance_by_db.get(db_id)
+    if schema_guidance is None:
+        raise KeyError(f"No schema guidance found for db_id: {db_id}")
+    join_lines = schema_guidance.split("Possible join keys:\n", maxsplit=1)[-1].splitlines()
+    join_guidance = "\n".join(join_lines[:12])
+
+    return "\n\n".join(
+        [
+            example["instruction"],
+            "Possible join keys:",
+            join_guidance,
+            example["input"],
+            "Return only the SQL query.",
+        ]
+    )
+
+
 def build_ownership_teacher_prompt(example: dict, schema_guidance_by_db: dict[str, str]) -> str:
     db_id = example["metadata"]["db_id"]
     schema_guidance = schema_guidance_by_db.get(db_id)
@@ -161,6 +210,12 @@ def create_eval_record(
         prompt = build_error_aware_prompt(example, schema_guidance_by_db)
     elif prompt_style == "source_table_v7":
         prompt = build_source_table_prompt(example, schema_guidance_by_db)
+    elif prompt_style == "direct_sql_v8":
+        prompt = build_direct_sql_prompt(example)
+    elif prompt_style == "direct_guided_v9":
+        prompt = build_direct_guided_prompt(example, schema_guidance_by_db)
+    elif prompt_style == "direct_join_v9":
+        prompt = build_direct_join_prompt(example, schema_guidance_by_db)
     else:
         prompt = build_prompt(example)
 
@@ -180,7 +235,15 @@ def parse_args() -> object:
     parser = argparse.ArgumentParser(description="Create a fixed SQL evaluation set.")
     parser.add_argument(
         "--prompt-style",
-        choices=["baseline", "ownership_teacher_v5", "error_aware_v6", "source_table_v7"],
+        choices=[
+            "baseline",
+            "ownership_teacher_v5",
+            "error_aware_v6",
+            "source_table_v7",
+            "direct_sql_v8",
+            "direct_guided_v9",
+            "direct_join_v9",
+        ],
         default="baseline",
     )
     parser.add_argument(
