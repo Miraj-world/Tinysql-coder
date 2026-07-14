@@ -20,6 +20,8 @@ This is a post-generation experiment. It makes conservative layered repairs:
    and exactly one table already in the query owns the referenced column.
 10. Bare-column join repair: a flat query uses a bare column whose sole owner
     table is missing, with exactly one direct foreign-key join available.
+11. Syntax-fragment repair: SQLite rejects the invalid token sequence
+    `IS NOT IN`, which has the unambiguous SQL spelling `NOT IN`.
 """
 
 import argparse
@@ -66,6 +68,7 @@ TABLE_ALIAS_RE = re.compile(
 )
 SQL_KEYWORD_ALIASES = {"WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "ON", "GROUP", "ORDER", "LIMIT"}
 CLAUSE_START_RE = re.compile(r"\b(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b", re.IGNORECASE)
+IS_NOT_IN_RE = re.compile(r"\bIS\s+NOT\s+IN\b", re.IGNORECASE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -539,6 +542,17 @@ def replace_unqualified_column(sql: str, column: str, owner_alias: str) -> str:
     return "".join(parts)
 
 
+def syntax_fragment_repair_for_error(sql: str, error: str) -> tuple[str, str] | None:
+    """Repair an exact invalid SQL token sequence with one valid spelling."""
+    if not re.search(r'near\s+["\']IN["\']:\s*syntax error', error or "", re.IGNORECASE):
+        return None
+    if not IS_NOT_IN_RE.search(sql):
+        return None
+
+    repaired_sql = IS_NOT_IN_RE.sub("NOT IN", sql)
+    return repaired_sql, "IS NOT IN -> NOT IN"
+
+
 def join_repair_for_error(sql: str, error: str, database_info: dict) -> tuple[str, str, str, str] | None:
     if has_nested_select(sql):
         return None
@@ -779,6 +793,15 @@ def repair_sql(
             if not next_result["ok"]:
                 break
             repair_notes.append(note)
+            repaired_sql = next_sql
+            continue
+
+        syntax_repair = syntax_fragment_repair_for_error(repaired_sql, result["error"])
+        if syntax_repair is not None:
+            next_sql, note = syntax_repair
+            repair_notes.append(note)
+            if next_sql == repaired_sql:
+                break
             repaired_sql = next_sql
             continue
 

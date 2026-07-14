@@ -8,6 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.repair_sql_predictions import (
+    syntax_fragment_repair_for_error,
     undeclared_alias_repair_for_error,
     unqualified_column_repair_for_error,
     unqualified_join_repair_for_error,
@@ -192,6 +193,33 @@ class UnqualifiedJoinRepairTests(unittest.TestCase):
                 "no such column: height",
                 DATABASE_INFO,
             )
+        )
+
+
+class SyntaxFragmentRepairTests(unittest.TestCase):
+    def test_replaces_invalid_is_not_in_sequence(self):
+        sql = "SELECT element FROM atom WHERE element IS NOT IN ('-')"
+
+        self.assertEqual(
+            syntax_fragment_repair_for_error(sql, 'near "IN": syntax error'),
+            (
+                "SELECT element FROM atom WHERE element NOT IN ('-')",
+                "IS NOT IN -> NOT IN",
+            ),
+        )
+
+    def test_requires_matching_sqlite_syntax_error(self):
+        sql = "SELECT element FROM atom WHERE element IS NOT IN ('-')"
+
+        self.assertIsNone(
+            syntax_fragment_repair_for_error(sql, "no such column: element")
+        )
+
+    def test_leaves_valid_not_in_unchanged(self):
+        sql = "SELECT element FROM atom WHERE element NOT IN ('-')"
+
+        self.assertIsNone(
+            syntax_fragment_repair_for_error(sql, 'near "IN": syntax error')
         )
 
 

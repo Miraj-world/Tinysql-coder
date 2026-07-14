@@ -92,3 +92,6 @@ Do not automatically resolve an ambiguous column just because one table was
 recently added. That would be a weak guess. The next experiment should inspect
 the remaining syntax and execution errors for a rule supported by stronger
 evidence.
+
+That inspection found and evaluated one exact syntax rule in
+[SQL Repair Experiment 010](sql-repair-syntax-fragment-001.md).

@@ -59,3 +59,4 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-14 | SQL Repair Experiment 007 | [sql-repair-unqualified-column-001.md](sql-repair-unqualified-column-001.md) |
 | 2026-07-14 | SQL Repair Experiment 008 | [sql-repair-undeclared-alias-001.md](sql-repair-undeclared-alias-001.md) |
 | 2026-07-14 | SQL Repair Experiment 009 | [sql-repair-unqualified-join-001.md](sql-repair-unqualified-join-001.md) |
+| 2026-07-14 | SQL Repair Experiment 010 | [sql-repair-syntax-fragment-001.md](sql-repair-syntax-fragment-001.md) |
