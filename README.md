@@ -53,6 +53,8 @@ Done so far:
 34. Trained and evaluated LoRA Run 007.
 35. Created SFT V7 with source-table supervision and evaluated LoRA Run 008.
 36. Built a focused repair error set across the strongest repaired runs.
+37. Added guarded unqualified-column, undeclared-alias, foreign-key join, and exact syntax repairs.
+38. Trained Run 009 for 160 steps on the clean V6 recipe and reached the best raw execution score.
 
 Latest high-level result:
 
@@ -66,6 +68,7 @@ LoRA Run 005 execution matches: 0/20
 LoRA Run 006 execution matches: 3/20
 LoRA Run 007 execution matches: 4/20
 LoRA Run 008 execution matches: 2/20
+LoRA Run 009 execution matches: 5/20
 Run 004 + alias repair matches: 3/20
 Run 004 + join repair matches:  4/20
 Run 004 + semantic repair matches: 5/20
@@ -75,9 +78,11 @@ Run 004 + table repair matches:    7/20
 Run 006 + repair matches:          3/20
 Run 007 + repair matches:          6/20
 Run 008 + repair matches:          3/20
+Run 009 + repair matches:          6/20
 ```
 
-The training pipeline works, and Run 004 is currently the best checkpoint.
+The training pipeline works. Run 009 is the best raw model at 5/20, while Run
+004 plus repair remains the best overall system at 7/20.
 Run 005 was a useful negative result: asking the model to emit ownership notes
 before SQL made generation less stable. A conservative alias-repair pass made
 more Run 004 predictions executable, but did not improve execution matches. A
@@ -110,6 +115,12 @@ experiments. The focused repair error set found 30 mechanically interesting
 remaining failures across repaired Runs 004, 007, and 008: 12 wrong-table
 column references, 7 invented columns, 6 ambiguous or unqualified columns,
 4 other execution errors, and 1 hallucinated table.
+
+Four guarded repair experiments improved executability but did not raise the
+best execution-match score. Returning to the clean V6 training recipe for 160
+steps produced Run 009, which improved raw execution matches from Run 007's
+4/20 to 5/20 and lowered validation loss from 0.1841 at step 80 to 0.1631 at
+step 160. Run 009 + repair reached 6/20.
 
 ## Project Structure
 
