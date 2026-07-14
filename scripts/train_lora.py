@@ -13,10 +13,10 @@ import random
 from pathlib import Path
 
 import torch
-from peft import LoraConfig, PeftModel, get_peft_model
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-path", type=Path, default=TRAIN_SFT_PATH)
     parser.add_argument("--validation-path", type=Path, default=VALIDATION_SFT_PATH)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        help="Load the base model in NF4 and train a QLoRA adapter.",
+    )
     parser.add_argument(
         "--initial-adapter-path",
         type=Path,
@@ -78,17 +83,37 @@ def load_tokenizer(model_name: str) -> AutoTokenizer:
     return tokenizer
 
 
-def load_lora_model(model_name: str, initial_adapter_path: Path | None = None) -> torch.nn.Module:
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        cache_dir=MODEL_CACHE_DIR,
-        dtype=torch.float16,
-        trust_remote_code=True,
-    )
+def load_lora_model(
+    model_name: str,
+    initial_adapter_path: Path | None = None,
+    load_in_4bit: bool = False,
+) -> torch.nn.Module:
+    model_kwargs = {
+        "cache_dir": MODEL_CACHE_DIR,
+        "dtype": torch.float16,
+        "trust_remote_code": True,
+    }
+    if load_in_4bit:
+        model_kwargs.update(
+            {
+                "quantization_config": BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                ),
+                "device_map": {"": 0},
+            }
+        )
+
+    model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
 
     # Gradient checkpointing reduces GPU memory usage. It can make training a
     # little slower, but that is a good tradeoff on a laptop GPU.
-    model.gradient_checkpointing_enable()
+    if load_in_4bit:
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    else:
+        model.gradient_checkpointing_enable()
     model.config.use_cache = False
 
     if initial_adapter_path is not None:
@@ -258,6 +283,7 @@ def main() -> None:
     print(f"Train path: {args.train_path}")
     print(f"Validation path: {args.validation_path}")
     print(f"Initial adapter: {args.initial_adapter_path if args.initial_adapter_path else 'none'}")
+    print(f"4-bit QLoRA: {args.load_in_4bit}")
 
     tokenizer = load_tokenizer(args.model)
     train_examples = read_jsonl(args.train_path)
@@ -285,7 +311,13 @@ def main() -> None:
         collate_fn=lambda examples: collate_batch(tokenizer, examples),
     )
 
-    model = load_lora_model(args.model, args.initial_adapter_path).to(device)
+    model = load_lora_model(
+        args.model,
+        args.initial_adapter_path,
+        args.load_in_4bit,
+    )
+    if not args.load_in_4bit:
+        model = model.to(device)
     model.train()
 
     trainable_parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -356,6 +388,7 @@ def main() -> None:
         "learning_rate": args.learning_rate,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "initial_adapter_path": str(args.initial_adapter_path) if args.initial_adapter_path else None,
+        "load_in_4bit": args.load_in_4bit,
         "peak_cuda_memory_allocated_gb": round(torch.cuda.max_memory_allocated() / (1024**3), 3),
         "peak_cuda_memory_reserved_gb": round(torch.cuda.max_memory_reserved() / (1024**3), 3),
     }

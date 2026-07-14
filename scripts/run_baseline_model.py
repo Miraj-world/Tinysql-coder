@@ -12,7 +12,7 @@ from pathlib import Path
 
 import torch
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,6 +53,7 @@ def build_messages(prompt: str) -> list[dict]:
 def load_model(
     model_name: str,
     adapter_path: Path | None,
+    load_in_4bit: bool = False,
 ) -> tuple[AutoTokenizer, AutoModelForCausalLM, torch.device]:
     """Load the base model and optionally attach a local LoRA adapter."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -64,12 +65,25 @@ def load_model(
         cache_dir=MODEL_CACHE_DIR,
         trust_remote_code=True,
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        cache_dir=MODEL_CACHE_DIR,
-        dtype=dtype,
-        trust_remote_code=True,
-    )
+    model_kwargs = {
+        "cache_dir": MODEL_CACHE_DIR,
+        "dtype": dtype,
+        "trust_remote_code": True,
+    }
+    if load_in_4bit:
+        model_kwargs.update(
+            {
+                "quantization_config": BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                ),
+                "device_map": {"": 0},
+            }
+        )
+
+    model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
 
     if adapter_path is not None:
         if not adapter_path.exists():
@@ -77,7 +91,8 @@ def load_model(
 
         model = PeftModel.from_pretrained(model, adapter_path)
 
-    model.to(device)
+    if not load_in_4bit:
+        model.to(device)
     model.eval()
 
     return tokenizer, model, device
@@ -139,6 +154,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-set-path", type=Path, default=EVAL_SET_PATH)
     parser.add_argument("--adapter-path", type=Path, default=None)
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
+    parser.add_argument("--load-in-4bit", action="store_true")
     return parser.parse_args()
 
 
@@ -149,12 +165,13 @@ def main() -> None:
     if args.limit is not None:
         eval_records = eval_records[: args.limit]
 
-    tokenizer, model, device = load_model(args.model, args.adapter_path)
+    tokenizer, model, device = load_model(args.model, args.adapter_path, args.load_in_4bit)
 
     print(f"Model: {args.model}")
     print(f"Adapter: {args.adapter_path if args.adapter_path else 'none'}")
     print(f"Model cache: {MODEL_CACHE_DIR}")
     print(f"Device: {device}")
+    print(f"4-bit: {args.load_in_4bit}")
     print(f"Examples: {len(eval_records)}")
 
     predictions = []

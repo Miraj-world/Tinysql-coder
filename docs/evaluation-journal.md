@@ -85,3 +85,4 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | Run 010 and Cascade Eval 015 | [eval-015-lora-run-010.md](eval-015-lora-run-010.md) |
 | 2026-07-14 | Filtered BIRD Training Pivot | [filtered-bird-training-pivot.md](filtered-bird-training-pivot.md) |
 | 2026-07-14 | Filtered BIRD Runs 011/012 Eval 016 | [eval-016-filtered-bird-training.md](eval-016-filtered-bird-training.md) |
+| 2026-07-14 | Qwen 3B QLoRA Readiness | [qwen-3b-qlora-readiness.md](qwen-3b-qlora-readiness.md) |

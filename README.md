@@ -84,6 +84,8 @@ Done so far:
 44. Added database-disjoint validation and exact mini-dev leakage checks.
 45. Trained Run 011 on direct SQL targets, then measured join-context failures.
 46. Continued Run 012 with aligned foreign-key guidance and reached 27/100 after repair.
+47. Added Windows-compatible NF4 QLoRA support and passed a 3B training smoke test.
+48. Evaluated the quantized 3B base model at 22/100 raw and 27/100 repaired.
 
 Latest high-level result:
 
@@ -588,6 +590,7 @@ docs/lora-training-run-010.md
 docs/eval-015-lora-run-010.md
 docs/filtered-bird-training-pivot.md
 docs/eval-016-filtered-bird-training.md
+docs/qwen-3b-qlora-readiness.md
 ```
 
 ## Next Step
