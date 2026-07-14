@@ -14,6 +14,8 @@ This is a post-generation experiment. It makes conservative layered repairs:
 6. Join pruning: a leading joined table is not referenced outside the join
    condition.
 7. Distinct repair: a simple single-column projection returns duplicate rows.
+8. Unqualified-column repair: a flat joined query uses a bare column name and
+   exactly one table already in the query owns it.
 """
 
 import argparse
@@ -450,6 +452,57 @@ def replacement_alias_for_error(sql: str, error: str, schema: dict[str, set[str]
     return bad_alias, owner_aliases[0]
 
 
+def unqualified_column_repair_for_error(
+    sql: str,
+    error: str,
+    schema: dict[str, set[str]],
+) -> tuple[str, str, str] | None:
+    """Qualify a bare missing column only when one joined alias can own it."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is not None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if len(aliases) < 2:
+        return None
+
+    owner_aliases = build_owner_aliases(schema, aliases).get(column, [])
+    if len(owner_aliases) != 1:
+        return None
+
+    owner_alias = owner_aliases[0]
+    repaired_sql = replace_unqualified_column(sql, column, owner_alias)
+    if repaired_sql == sql:
+        return None
+    return repaired_sql, owner_alias, column
+
+
+def replace_unqualified_column(sql: str, column: str, owner_alias: str) -> str:
+    """Replace bare identifiers while leaving strings and qualified names alone."""
+    identifier_re = re.compile(
+        rf"(?P<quote>[`\"]?)(?P<column>{re.escape(column)})(?P=quote)(?![\w.]|\s*\.)",
+        re.IGNORECASE,
+    )
+    parts = re.split(r"('(?:''|[^'])*')", sql)
+
+    def replace_match(match: re.Match) -> str:
+        prefix = match.string[: match.start()]
+        if re.search(r"\.\s*$", prefix):
+            return match.group(0)
+        return f"{owner_alias}.{match.group('quote')}{match.group('column')}{match.group('quote')}"
+
+    for index in range(0, len(parts), 2):
+        parts[index] = identifier_re.sub(replace_match, parts[index])
+    return "".join(parts)
+
+
 def join_repair_for_error(sql: str, error: str, database_info: dict) -> tuple[str, str, str, str] | None:
     if has_nested_select(sql):
         return None
@@ -645,6 +698,19 @@ def repair_sql(
 
         replacement = replacement_alias_for_error(repaired_sql, result["error"], schema)
         if replacement is None:
+            unqualified_repair = unqualified_column_repair_for_error(
+                repaired_sql,
+                result["error"],
+                schema,
+            )
+            if unqualified_repair is not None:
+                next_sql, owner_alias, column = unqualified_repair
+                repair_notes.append(f"{column} -> {owner_alias}.{column}")
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
             join_repair = None
             if enable_join_repair:
                 join_repair = join_repair_for_error(repaired_sql, result["error"], database_info)
