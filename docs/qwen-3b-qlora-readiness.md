@@ -57,6 +57,34 @@ step 5 validation loss:       0.2300
 This proves the 3B model can be fine-tuned locally without exceeding the 8 GB
 GPU limit.
 
+## Full-Run Memory Correction
+
+The first 400-step Run 013 attempt used the same 2,080-token limit as the smoke
+test. It reached step 37, then a longer shuffled example caused a CUDA
+out-of-memory error. A five-step smoke test had not sampled enough of the data
+to expose that worst case.
+
+The corrected training path adds `--drop-overlength` and uses a 1,792-token
+limit. It removes a whole example when the complete assistant answer will not
+fit; it does not truncate the gold SQL and accidentally teach an incomplete
+query.
+
+```text
+raw training examples:         5,825
+safe training examples:        5,442
+dropped training examples:       383
+raw validation examples:         776
+safe validation examples:        776
+dropped validation examples:       0
+five-step validation loss:       0.2297
+peak CUDA allocated:             5.777 GB
+peak CUDA reserved:              9.193 GB
+automated tests:                 40 passed
+```
+
+This is a safer basis for the full run: every retained example contains its
+complete SQL answer, and the validation set remains unchanged.
+
 ## Untrained 3B Baseline
 
 The quantized base model was evaluated on the fixed 100-question set before

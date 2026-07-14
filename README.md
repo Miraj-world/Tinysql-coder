@@ -86,6 +86,7 @@ Done so far:
 46. Continued Run 012 with aligned foreign-key guidance and reached 27/100 after repair.
 47. Added Windows-compatible NF4 QLoRA support and passed a 3B training smoke test.
 48. Evaluated the quantized 3B base model at 22/100 raw and 27/100 repaired.
+49. Made 3B training length-safe after a step-37 memory failure; 40 tests pass.
 
 Latest high-level result:
 

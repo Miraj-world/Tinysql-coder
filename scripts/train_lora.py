@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         help="Load the base model in NF4 and train a QLoRA adapter.",
     )
     parser.add_argument(
+        "--drop-overlength",
+        action="store_true",
+        help="Drop examples longer than the sequence limit instead of truncating gold SQL.",
+    )
+    parser.add_argument(
         "--initial-adapter-path",
         type=Path,
         default=None,
@@ -111,7 +116,11 @@ def load_lora_model(
     # Gradient checkpointing reduces GPU memory usage. It can make training a
     # little slower, but that is a good tradeoff on a laptop GPU.
     if load_in_4bit:
-        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+        )
     else:
         model.gradient_checkpointing_enable()
     model.config.use_cache = False
@@ -203,11 +212,16 @@ def tokenize_dataset(
     tokenizer: AutoTokenizer,
     examples: list[dict],
     max_sequence_length: int,
+    drop_overlength: bool = False,
 ) -> list[dict[str, list[int]]]:
-    tokenized_examples = [
-        tokenize_example(tokenizer, example, max_sequence_length)
-        for example in examples
-    ]
+    tokenized_examples = []
+    for example in examples:
+        if drop_overlength:
+            full_text = format_full_conversation(tokenizer, example)
+            full_length = len(tokenizer(full_text, add_special_tokens=False)["input_ids"])
+            if full_length > max_sequence_length:
+                continue
+        tokenized_examples.append(tokenize_example(tokenizer, example, max_sequence_length))
 
     # If an example is so long that the assistant answer was fully truncated,
     # there are no useful label tokens left. Drop it instead of training on it.
@@ -284,6 +298,7 @@ def main() -> None:
     print(f"Validation path: {args.validation_path}")
     print(f"Initial adapter: {args.initial_adapter_path if args.initial_adapter_path else 'none'}")
     print(f"4-bit QLoRA: {args.load_in_4bit}")
+    print(f"Drop overlength examples: {args.drop_overlength}")
 
     tokenizer = load_tokenizer(args.model)
     train_examples = read_jsonl(args.train_path)
@@ -292,11 +307,23 @@ def main() -> None:
     print(f"Raw train examples: {len(train_examples)}")
     print(f"Raw validation examples: {len(validation_examples)}")
 
-    train_dataset = tokenize_dataset(tokenizer, train_examples, args.max_sequence_length)
-    validation_dataset = tokenize_dataset(tokenizer, validation_examples, args.max_sequence_length)
+    train_dataset = tokenize_dataset(
+        tokenizer,
+        train_examples,
+        args.max_sequence_length,
+        args.drop_overlength,
+    )
+    validation_dataset = tokenize_dataset(
+        tokenizer,
+        validation_examples,
+        args.max_sequence_length,
+        args.drop_overlength,
+    )
 
     print(f"Tokenized train examples: {len(train_dataset)}")
     print(f"Tokenized validation examples: {len(validation_dataset)}")
+    print(f"Dropped train examples: {len(train_examples) - len(train_dataset)}")
+    print(f"Dropped validation examples: {len(validation_examples) - len(validation_dataset)}")
 
     train_loader = DataLoader(
         train_dataset,
@@ -389,6 +416,9 @@ def main() -> None:
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "initial_adapter_path": str(args.initial_adapter_path) if args.initial_adapter_path else None,
         "load_in_4bit": args.load_in_4bit,
+        "drop_overlength": args.drop_overlength,
+        "tokenized_train_examples": len(train_dataset),
+        "tokenized_validation_examples": len(validation_dataset),
         "peak_cuda_memory_allocated_gb": round(torch.cuda.max_memory_allocated() / (1024**3), 3),
         "peak_cuda_memory_reserved_gb": round(torch.cuda.max_memory_reserved() / (1024**3), 3),
     }
