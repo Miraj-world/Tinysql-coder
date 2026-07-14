@@ -14,12 +14,21 @@ This is a post-generation experiment. It makes conservative layered repairs:
 6. Join pruning: a leading joined table is not referenced outside the join
    condition.
 7. Distinct repair: a simple single-column projection returns duplicate rows.
+8. Unqualified-column repair: a flat joined query uses a bare column name and
+   exactly one table already in the query owns it.
+9. Undeclared-alias repair: a flat query uses an alias that was never declared,
+   and exactly one table already in the query owns the referenced column.
+10. Bare-column join repair: a flat query uses a bare column whose sole owner
+    table is missing, with exactly one direct foreign-key join available.
+11. Syntax-fragment repair: SQLite rejects the invalid token sequence
+    `IS NOT IN`, which has the unambiguous SQL spelling `NOT IN`.
 """
 
 import argparse
 import json
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 
@@ -27,6 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004" / "predictions.jsonl"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "lora-run-004-table-repaired" / "predictions.jsonl"
 DATABASES_DIR = PROJECT_ROOT / "data" / "bird_mini_dev" / "dev_databases"
+QUERY_TIMEOUT_SECONDS = 5.0
 
 NO_SUCH_COLUMN_RE = re.compile(r"no such column: (?P<name>.+)", re.IGNORECASE)
 QUALIFIED_COLUMN_RE = re.compile(
@@ -60,6 +70,7 @@ TABLE_ALIAS_RE = re.compile(
 )
 SQL_KEYWORD_ALIASES = {"WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "ON", "GROUP", "ORDER", "LIMIT"}
 CLAUSE_START_RE = re.compile(r"\b(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b", re.IGNORECASE)
+IS_NOT_IN_RE = re.compile(r"\bIS\s+NOT\s+IN\b", re.IGNORECASE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -161,12 +172,30 @@ def normalize_rows(rows: list[tuple]) -> list[list[object]]:
 
 
 def execute_sql(db_id: str, sql: str) -> dict:
+    timed_out = False
+    connection = None
     try:
-        with sqlite3.connect(sqlite_path_for_database(db_id)) as connection:
-            rows = connection.execute(sql).fetchall()
+        connection = sqlite3.connect(sqlite_path_for_database(db_id))
+        deadline = time.monotonic() + QUERY_TIMEOUT_SECONDS
+
+        def stop_expensive_query() -> int:
+            nonlocal timed_out
+            timed_out = time.monotonic() >= deadline
+            return int(timed_out)
+
+        connection.set_progress_handler(stop_expensive_query, 10_000)
+        rows = connection.execute(sql).fetchall()
         return {"ok": True, "rows": normalize_rows(rows), "error": None}
     except Exception as error:
-        return {"ok": False, "rows": None, "error": str(error)}
+        error_message = (
+            f"query timeout after {QUERY_TIMEOUT_SECONDS:g} seconds"
+            if timed_out
+            else str(error)
+        )
+        return {"ok": False, "rows": None, "error": error_message}
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def parse_aliases(sql: str) -> dict[str, str]:
@@ -450,6 +479,100 @@ def replacement_alias_for_error(sql: str, error: str, schema: dict[str, set[str]
     return bad_alias, owner_aliases[0]
 
 
+def undeclared_alias_repair_for_error(
+    sql: str,
+    error: str,
+    schema: dict[str, set[str]],
+) -> tuple[str, str, str, str] | None:
+    """Replace a missing alias only when one in-scope table owns the column."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if bad_alias in aliases:
+        return None
+
+    owner_aliases = build_owner_aliases(schema, aliases).get(column, [])
+    if len(owner_aliases) != 1:
+        return None
+
+    owner_alias = owner_aliases[0]
+    repaired_sql = replace_qualified_column_alias(sql, bad_alias, owner_alias, column)
+    if repaired_sql == sql:
+        return None
+    return repaired_sql, bad_alias, owner_alias, column
+
+
+def unqualified_column_repair_for_error(
+    sql: str,
+    error: str,
+    schema: dict[str, set[str]],
+) -> tuple[str, str, str] | None:
+    """Qualify a bare missing column only when one joined alias can own it."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is not None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if len(aliases) < 2:
+        return None
+
+    owner_aliases = build_owner_aliases(schema, aliases).get(column, [])
+    if len(owner_aliases) != 1:
+        return None
+
+    owner_alias = owner_aliases[0]
+    repaired_sql = replace_unqualified_column(sql, column, owner_alias)
+    if repaired_sql == sql:
+        return None
+    return repaired_sql, owner_alias, column
+
+
+def replace_unqualified_column(sql: str, column: str, owner_alias: str) -> str:
+    """Replace bare identifiers while leaving strings and qualified names alone."""
+    identifier_re = re.compile(
+        rf"(?P<quote>[`\"]?)(?P<column>{re.escape(column)})(?P=quote)(?![\w.]|\s*\.)",
+        re.IGNORECASE,
+    )
+    parts = re.split(r"('(?:''|[^'])*')", sql)
+
+    def replace_match(match: re.Match) -> str:
+        prefix = match.string[: match.start()]
+        if re.search(r"\.\s*$", prefix):
+            return match.group(0)
+        return f"{owner_alias}.{match.group('quote')}{match.group('column')}{match.group('quote')}"
+
+    for index in range(0, len(parts), 2):
+        parts[index] = identifier_re.sub(replace_match, parts[index])
+    return "".join(parts)
+
+
+def syntax_fragment_repair_for_error(sql: str, error: str) -> tuple[str, str] | None:
+    """Repair an exact invalid SQL token sequence with one valid spelling."""
+    if not re.search(r'near\s+["\']IN["\']:\s*syntax error', error or "", re.IGNORECASE):
+        return None
+    if not IS_NOT_IN_RE.search(sql):
+        return None
+
+    repaired_sql = IS_NOT_IN_RE.sub("NOT IN", sql)
+    return repaired_sql, "IS NOT IN -> NOT IN"
+
+
 def join_repair_for_error(sql: str, error: str, database_info: dict) -> tuple[str, str, str, str] | None:
     if has_nested_select(sql):
         return None
@@ -494,6 +617,56 @@ def join_repair_for_error(sql: str, error: str, database_info: dict) -> tuple[st
         f"{bad_alias}.{column} -> {new_alias}.{column}"
     )
     return repaired_sql, note, bad_alias, new_alias
+
+
+def unqualified_join_repair_for_error(
+    sql: str,
+    error: str,
+    database_info: dict,
+) -> tuple[str, str] | None:
+    """Join the unique missing owner of a bare column through one proven FK."""
+    if has_nested_select(sql):
+        return None
+
+    match = NO_SUCH_COLUMN_RE.search(error or "")
+    if not match:
+        return None
+
+    bad_alias, column = split_column_reference(match.group("name"))
+    if bad_alias is not None:
+        return None
+
+    aliases = parse_aliases(sql)
+    if not aliases:
+        return None
+
+    schema = database_info["schema"]
+    if build_owner_aliases(schema, aliases).get(column):
+        return None
+
+    owner_tables = owner_tables_for_column(schema, column)
+    if len(owner_tables) != 1:
+        return None
+
+    missing_table = owner_tables[0]
+    join = find_direct_join(aliases, missing_table, database_info["foreign_keys"])
+    if join is None:
+        return None
+
+    existing_alias, existing_column, missing_column, _ = join
+    new_alias = next_table_alias(aliases)
+    join_clause = (
+        f"INNER JOIN {missing_table} AS {new_alias} "
+        f"ON {existing_alias}.{existing_column} = {new_alias}.{missing_column}"
+    )
+    repaired_sql = insert_join(sql, join_clause)
+    repaired_sql = replace_unqualified_column(repaired_sql, column, new_alias)
+    note = (
+        f"added {missing_table} AS {new_alias} "
+        f"ON {existing_alias}.{existing_column} = {new_alias}.{missing_column}; "
+        f"{column} -> {new_alias}.{column}"
+    )
+    return repaired_sql, note
 
 
 def lookup_repair_for_sql(db_id: str, sql: str, database_info: dict) -> tuple[str, str] | None:
@@ -643,8 +816,58 @@ def repair_sql(
             repaired_sql = next_sql
             continue
 
+        syntax_repair = syntax_fragment_repair_for_error(repaired_sql, result["error"])
+        if syntax_repair is not None:
+            next_sql, note = syntax_repair
+            repair_notes.append(note)
+            if next_sql == repaired_sql:
+                break
+            repaired_sql = next_sql
+            continue
+
         replacement = replacement_alias_for_error(repaired_sql, result["error"], schema)
         if replacement is None:
+            undeclared_alias_repair = undeclared_alias_repair_for_error(
+                repaired_sql,
+                result["error"],
+                schema,
+            )
+            if undeclared_alias_repair is not None:
+                next_sql, bad_alias, owner_alias, column = undeclared_alias_repair
+                repair_notes.append(f"{bad_alias}.{column} -> {owner_alias}.{column}")
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
+            unqualified_repair = unqualified_column_repair_for_error(
+                repaired_sql,
+                result["error"],
+                schema,
+            )
+            if unqualified_repair is not None:
+                next_sql, owner_alias, column = unqualified_repair
+                repair_notes.append(f"{column} -> {owner_alias}.{column}")
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
+            unqualified_join_repair = None
+            if enable_join_repair:
+                unqualified_join_repair = unqualified_join_repair_for_error(
+                    repaired_sql,
+                    result["error"],
+                    database_info,
+                )
+            if unqualified_join_repair is not None:
+                next_sql, note = unqualified_join_repair
+                repair_notes.append(note)
+                if next_sql == repaired_sql:
+                    break
+                repaired_sql = next_sql
+                continue
+
             join_repair = None
             if enable_join_repair:
                 join_repair = join_repair_for_error(repaired_sql, result["error"], database_info)

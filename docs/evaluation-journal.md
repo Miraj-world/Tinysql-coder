@@ -56,3 +56,10 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 | 2026-07-13 | LoRA Training Run 008 | [lora-training-run-008.md](lora-training-run-008.md) |
 | 2026-07-13 | LoRA Run 008 Eval 012 | [eval-012-lora-run-008.md](eval-012-lora-run-008.md) |
 | 2026-07-14 | Focused Repair Error Set 001 | [focused-repair-error-set-001.md](focused-repair-error-set-001.md) |
+| 2026-07-14 | SQL Repair Experiment 007 | [sql-repair-unqualified-column-001.md](sql-repair-unqualified-column-001.md) |
+| 2026-07-14 | SQL Repair Experiment 008 | [sql-repair-undeclared-alias-001.md](sql-repair-undeclared-alias-001.md) |
+| 2026-07-14 | SQL Repair Experiment 009 | [sql-repair-unqualified-join-001.md](sql-repair-unqualified-join-001.md) |
+| 2026-07-14 | SQL Repair Experiment 010 | [sql-repair-syntax-fragment-001.md](sql-repair-syntax-fragment-001.md) |
+| 2026-07-14 | LoRA Training Run 009 | [lora-training-run-009.md](lora-training-run-009.md) |
+| 2026-07-14 | LoRA Run 009 Eval 013 | [eval-013-lora-run-009.md](eval-013-lora-run-009.md) |
+| 2026-07-14 | Run 009 Full Validation Eval 014 | [eval-014-lora-run-009-full-validation.md](eval-014-lora-run-009-full-validation.md) |
