@@ -1,4 +1,4 @@
-"""Create a small fixed validation sample for baseline experiments.
+"""Create a fixed validation sample for baseline experiments.
 
 The same 20 examples are reused across prompt/model changes so we can compare
 before and after results without changing the test set underneath ourselves.
@@ -124,7 +124,7 @@ def build_source_table_prompt(example: dict, schema_guidance_by_db: dict[str, st
     )
 
 
-def choose_balanced_sample(examples: list[dict]) -> list[dict]:
+def choose_balanced_sample(examples: list[dict], sample_size: int = SAMPLE_SIZE) -> list[dict]:
     random_generator = random.Random(RANDOM_SEED)
     grouped_examples = defaultdict(list)
 
@@ -138,9 +138,9 @@ def choose_balanced_sample(examples: list[dict]) -> list[dict]:
     selected = []
     difficulty_names = sorted(grouped_examples)
 
-    while len(selected) < SAMPLE_SIZE and any(grouped_examples.values()):
+    while len(selected) < sample_size and any(grouped_examples.values()):
         for difficulty in difficulty_names:
-            if len(selected) >= SAMPLE_SIZE:
+            if len(selected) >= sample_size:
                 break
             if grouped_examples[difficulty]:
                 selected.append(grouped_examples[difficulty].pop())
@@ -177,11 +177,17 @@ def create_eval_record(
 def parse_args() -> object:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Create a fixed 20-example SQL evaluation set.")
+    parser = argparse.ArgumentParser(description="Create a fixed SQL evaluation set.")
     parser.add_argument(
         "--prompt-style",
         choices=["baseline", "ownership_teacher_v5", "error_aware_v6", "source_table_v7"],
         default="baseline",
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=SAMPLE_SIZE,
+        help="Number of balanced validation examples to include (default: 20).",
     )
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
     return parser.parse_args()
@@ -189,9 +195,11 @@ def parse_args() -> object:
 
 def main() -> None:
     args = parse_args()
+    if args.sample_size < 1:
+        raise ValueError("--sample-size must be at least 1")
     validation_examples = read_jsonl(VALIDATION_PATH)
     schema_guidance_by_db = read_json(SCHEMA_GUIDANCE_PATH)
-    sample = choose_balanced_sample(validation_examples)
+    sample = choose_balanced_sample(validation_examples, args.sample_size)
     eval_records = [
         create_eval_record(example, args.prompt_style, schema_guidance_by_db)
         for example in sample
