@@ -6,17 +6,17 @@ Raw generated artifacts live under `outputs/`. These markdown files are for huma
 
 ## Current Snapshot
 
-As of 2026-07-14, the 1.5B LoRA Run 010 is the best raw adapter at 26/100
-execution matches. The best end-to-end system uses repaired Run 009 as primary
-and repaired Run 010 only when the primary SQL fails to execute. This cascade
-reached 35/100 execution matches and made 92/100 predictions executable. The
-current evidence is in [Eval 015](eval-015-lora-run-010.md).
+As of 2026-07-15, the final practical Run 013 pipeline has been tested once on
+100 previously unseen BIRD questions. It reached 36/100 execution matches raw
+and **43/100 after the unchanged guarded repair pipeline**. Repaired SQL
+executed successfully for 83/100 questions. See
+[Eval 019](eval-019-unseen-bird-dev.md).
 
-Runs 011 and 012 then tested 6,601 curated BIRD training pairs. Relationship-
-aligned Run 012 reached 20/100 raw and 27/100 after repair, while a three-model
-fallback made 96/100 SQL predictions executable but remained at 35/100 correct.
-The best-system decision therefore did not change. See
-[Eval 016](eval-016-filtered-bird-training.md).
+The earlier gold-free semantic judge remains the best development-benchmark
+system at 46/100, but it uses a much more expensive ten-source candidate pool.
+That score and the 43/100 unseen single-model score describe different systems
+and should not be treated as a direct comparison. Model experimentation is now
+stopped.
 
 Historical "Next Step" sections below record what was learned at that point in
 the project; later entries supersede them rather than rewriting the history.
@@ -90,3 +90,4 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | Database Value Retrieval V1 | [value-retrieval-v1.md](value-retrieval-v1.md) |
 | 2026-07-14 | SFT V10 Value-Context Alignment | [sft-v10-value-context.md](sft-v10-value-context.md) |
 | 2026-07-14 | Consensus and Gold-Free SQL Judge Eval 018 | [eval-018-consensus-and-sql-judge.md](eval-018-consensus-and-sql-judge.md) |
+| 2026-07-15 | Unseen BIRD Dev Questions Eval 019 | [eval-019-unseen-bird-dev.md](eval-019-unseen-bird-dev.md) |

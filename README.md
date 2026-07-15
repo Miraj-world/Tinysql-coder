@@ -16,16 +16,18 @@ database schema + question + evidence -> SQL query
 
 ## Current Status
 
-Current verified snapshot (2026-07-14):
+Current verified snapshot (2026-07-15):
 
 ```text
-Best model-only configuration:      Run 013 + values + repair at 35/100
+Best development model pipeline:    Run 013 + values + repair at 35/100
 Best execution consensus:           44/100
 Best end-to-end system:              gold-free SQL judge at 46/100
 Judge SQL executable:                95/100
-Automated tests:                     53 passing
+Final unseen-question pipeline:      Run 013 + values + repair at 43/100
+Unseen pipeline SQL executable:      83/100
+Automated tests:                     58 passing
 Default branch:                   main
-Current direction:                database-value retrieval
+Current direction:                experiment complete
 ```
 
 Run 013 trained Qwen2.5-Coder-3B with 4-bit QLoRA on the official filtered BIRD
@@ -33,8 +35,14 @@ rows. Database-value retrieval raised it to 29/100 raw and 35/100 after repair.
 With result consensus and a gold-free semantic SQL judge, the end-to-end system
 reached a new project best of 46/100.
 
-The latest full benchmark and interpretation are documented in
-[Eval 017](docs/eval-017-qwen-3b-run-013.md).
+The final one-shot evaluation used 100 official BIRD dev questions whose IDs
+were excluded from the 500-question mini-dev set. The locked Run 013 value-
+guided pipeline scored 36/100 raw and 43/100 after its unchanged guarded repair
+pass. These are unseen questions on familiar database schemas. See
+[Eval 019](docs/eval-019-unseen-bird-dev.md).
+
+The final unseen benchmark and interpretation are documented in
+[Eval 019](docs/eval-019-unseen-bird-dev.md).
 
 Done so far:
 
@@ -93,6 +101,7 @@ Done so far:
 53. Prepared value-aligned SFT V10 and passed a 3B continuation smoke test.
 54. Added execution-result consensus and reached 44/100 without expected answers.
 55. Added a gold-free semantic SQL judge and reached the final best of 46/100.
+56. Froze a leakage-checked unseen-question set and scored the practical Run 013 pipeline at 43/100 after repair.
 
 Latest high-level result:
 
@@ -148,12 +157,16 @@ Value-guided cascade SQL executed: 99/100
 Execution consensus matches:       44/100
 Gold-free SQL judge matches:        46/100
 Gold-free SQL judge SQL executed:   95/100
+Unseen Run 013 + values raw:         36/100
+Unseen Run 013 + values + repair:    43/100
+Unseen repaired SQL executed:        83/100
 ```
 
-The earlier 20-question experiments established the repair pipeline. The
-current authoritative comparison is the fixed 100-question benchmark, where
-Run 013 is the strongest single repaired model at 34/100 and its execution-only
-fallback cascade is best overall at 36/100.
+The earlier 20-question experiments established the repair pipeline. The fixed
+100-question mini-dev benchmark is the authoritative development comparison;
+the leakage-checked Eval 019 set is the authoritative final test of unseen
+questions. Because their difficulty mixes differ, their scores should not be
+treated as a controlled before-and-after comparison.
 Run 005 was a useful negative result: asking the model to emit ownership notes
 before SQL made generation less stable. A conservative alias-repair pass made
 more Run 004 predictions executable, but did not improve execution matches. A
@@ -613,9 +626,11 @@ docs/eval-016-filtered-bird-training.md
 docs/qwen-3b-qlora-readiness.md
 docs/eval-017-qwen-3b-run-013.md
 docs/value-retrieval-v1.md
+docs/eval-018-consensus-and-sql-judge.md
+docs/eval-019-unseen-bird-dev.md
 ```
 
-## Next Step
+## Final Decision
 
 The final semantic judge improved selection among executable candidates, but
 the full benchmark still shows that semantic reasoning is the larger bottleneck:
@@ -626,13 +641,11 @@ the full benchmark still shows that semantic reasoning is the larger bottleneck:
 5/100 fail to execute
 ```
 
-The project milestone remains:
-
-```text
-at least 50/100 execution matches after repair
-```
-
 Run 013, leakage-safe value retrieval, execution consensus, and the final
 gold-free SQL judge improved the project best to 46/100. Run 014 and beam search
-did not improve it. The experiment series is stopped after the requested final
-test. See [Eval 018](docs/eval-018-consensus-and-sql-judge.md).
+did not improve it. A final one-shot test on unseen questions reached 43/100
+with the practical single-model repaired pipeline. The project did not reach
+the original 50/100 milestone, but it demonstrated real question-level
+generalization. The experiment series is now stopped. See
+[Eval 018](docs/eval-018-consensus-and-sql-judge.md) and
+[Eval 019](docs/eval-019-unseen-bird-dev.md).
