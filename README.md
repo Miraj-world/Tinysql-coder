@@ -19,19 +19,19 @@ database schema + question + evidence -> SQL query
 Current verified snapshot (2026-07-14):
 
 ```text
-Best raw configuration:            Run 013 + values at 29/100
-Best single configuration + repair: Run 013 + values at 35/100
-Best execution-fallback cascade:    39/100
-Cascade SQL executable:             99/100
-Automated tests:                    48 passing
+Best model-only configuration:      Run 013 + values + repair at 35/100
+Best execution consensus:           44/100
+Best end-to-end system:              gold-free SQL judge at 46/100
+Judge SQL executable:                95/100
+Automated tests:                     53 passing
 Default branch:                   main
 Current direction:                database-value retrieval
 ```
 
 Run 013 trained Qwen2.5-Coder-3B with 4-bit QLoRA on the official filtered BIRD
 rows. Database-value retrieval raised it to 29/100 raw and 35/100 after repair.
-With execution-only fallbacks, it established a new project best of 39/100 with
-99/100 predictions executable.
+With result consensus and a gold-free semantic SQL judge, the end-to-end system
+reached a new project best of 46/100.
 
 The latest full benchmark and interpretation are documented in
 [Eval 017](docs/eval-017-qwen-3b-run-013.md).
@@ -91,6 +91,8 @@ Done so far:
 51. Added leakage-safe SQLite value retrieval; 46 automated tests pass.
 52. Evaluated value retrieval and raised the project-best cascade to 39/100.
 53. Prepared value-aligned SFT V10 and passed a 3B continuation smoke test.
+54. Added execution-result consensus and reached 44/100 without expected answers.
+55. Added a gold-free semantic SQL judge and reached the final best of 46/100.
 
 Latest high-level result:
 
@@ -143,6 +145,9 @@ Run 013 + values raw matches:      29/100
 Run 013 + values + repair:         35/100
 Value-guided cascade matches:      39/100
 Value-guided cascade SQL executed: 99/100
+Execution consensus matches:       44/100
+Gold-free SQL judge matches:        46/100
+Gold-free SQL judge SQL executed:   95/100
 ```
 
 The earlier 20-question experiments established the repair pipeline. The
@@ -612,14 +617,13 @@ docs/value-retrieval-v1.md
 
 ## Next Step
 
-Value-guided Run 013 and the repair pipeline now make almost every cascade prediction
-executable, but the full benchmark shows that semantic reasoning is the larger
-bottleneck:
+The final semantic judge improved selection among executable candidates, but
+the full benchmark still shows that semantic reasoning is the larger bottleneck:
 
 ```text
-39/100 cascade predictions return the correct rows
-60/100 execute but return the wrong rows
-1/100 still fails to execute
+46/100 judge predictions return the correct rows
+49/100 execute but return the wrong rows
+5/100 fail to execute
 ```
 
 The project milestone remains:
@@ -628,8 +632,7 @@ The project milestone remains:
 at least 50/100 execution matches after repair
 ```
 
-Run 013 completed the stronger 3B QLoRA experiment, and leakage-safe value
-retrieval improved the project best to 39/100. The active Run 014 experiment
-continues training on SFT V10 so the model learns how to use the new value
-context. See [Eval 017](docs/eval-017-qwen-3b-run-013.md), [Value Retrieval
-V1](docs/value-retrieval-v1.md), and [SFT V10](docs/sft-v10-value-context.md).
+Run 013, leakage-safe value retrieval, execution consensus, and the final
+gold-free SQL judge improved the project best to 46/100. Run 014 and beam search
+did not improve it. The experiment series is stopped after the requested final
+test. See [Eval 018](docs/eval-018-consensus-and-sql-judge.md).

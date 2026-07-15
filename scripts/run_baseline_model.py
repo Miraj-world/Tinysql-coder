@@ -103,6 +103,7 @@ def generate_sql(
     model: AutoModelForCausalLM,
     device: torch.device,
     prompt: str,
+    num_beams: int = 1,
 ) -> str:
     messages = build_messages(prompt)
     chat_prompt = tokenizer.apply_chat_template(
@@ -118,6 +119,8 @@ def generate_sql(
             **inputs,
             max_new_tokens=MAX_NEW_TOKENS,
             do_sample=False,
+            num_beams=num_beams,
+            early_stopping=num_beams > 1,
             pad_token_id=tokenizer.eos_token_id,
         )
 
@@ -155,11 +158,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter-path", type=Path, default=None)
     parser.add_argument("--output-path", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--load-in-4bit", action="store_true")
+    parser.add_argument("--num-beams", type=int, default=1)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.num_beams < 1:
+        raise ValueError("--num-beams must be at least 1")
     eval_records = read_jsonl(args.eval_set_path)
 
     if args.limit is not None:
@@ -172,11 +178,12 @@ def main() -> None:
     print(f"Model cache: {MODEL_CACHE_DIR}")
     print(f"Device: {device}")
     print(f"4-bit: {args.load_in_4bit}")
+    print(f"Beams: {args.num_beams}")
     print(f"Examples: {len(eval_records)}")
 
     predictions = []
     for index, record in enumerate(eval_records, start=1):
-        predicted_sql = generate_sql(tokenizer, model, device, record["prompt"])
+        predicted_sql = generate_sql(tokenizer, model, device, record["prompt"], args.num_beams)
         result = {
             **record,
             "model": args.model,
