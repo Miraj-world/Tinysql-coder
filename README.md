@@ -4,6 +4,12 @@ TinySQL-coder is a learning-first text-to-SQL fine-tuning project using the
 BIRD mini-dev dataset, Qwen2.5-Coder, LoRA, execution-based evaluation, and a
 guarded post-generation SQL repair pipeline.
 
+**Live portfolio demo:** [tinysql-lab.streamlit.app](https://tinysql-lab.streamlit.app/)
+
+The public Streamlit app lets visitors inspect real frozen evaluation examples,
+generated SQL, execution results, benchmark progression, and the final unseen
+test. It is an evaluation explorer rather than live GPU inference.
+
 Important clarification: **BIRD does not mean bird images here**. BIRD is a
 database question-answering benchmark. Each example contains a natural-language
 question, database context, and the SQL query that answers the question.
