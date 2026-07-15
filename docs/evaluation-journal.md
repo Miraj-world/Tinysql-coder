@@ -86,3 +86,5 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | Filtered BIRD Training Pivot | [filtered-bird-training-pivot.md](filtered-bird-training-pivot.md) |
 | 2026-07-14 | Filtered BIRD Runs 011/012 Eval 016 | [eval-016-filtered-bird-training.md](eval-016-filtered-bird-training.md) |
 | 2026-07-14 | Qwen 3B QLoRA Readiness and Length-Safety Correction | [qwen-3b-qlora-readiness.md](qwen-3b-qlora-readiness.md) |
+| 2026-07-14 | Qwen 3B Run 013 Eval 017 | [eval-017-qwen-3b-run-013.md](eval-017-qwen-3b-run-013.md) |
+| 2026-07-14 | Database Value Retrieval V1 | [value-retrieval-v1.md](value-retrieval-v1.md) |

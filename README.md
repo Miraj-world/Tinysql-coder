@@ -19,22 +19,23 @@ database schema + question + evidence -> SQL query
 Current verified snapshot (2026-07-14):
 
 ```text
-Best raw adapter:                  LoRA Run 010 (Qwen 1.5B)
-Run 010 raw execution accuracy:   26/100
-Best single-adapter + repair:     Run 009 at 29/100
-Run 009 -> Run 010 cascade:       35/100
-Cascade SQL executable:           92/100
-Automated tests:                  38 passing
+Best raw adapter:                  LoRA Run 013 (Qwen 3B)
+Run 013 raw execution accuracy:   28/100
+Best single-adapter + repair:     Run 013 at 34/100
+Best execution-fallback cascade:  36/100
+Cascade SQL executable:           98/100
+Automated tests:                  46 passing
 Default branch:                   main
-Run 010 direction:                Qwen2.5-Coder-1.5B
+Current direction:                database-value retrieval
 ```
 
-Runs 011 and 012 tested the official filtered BIRD training rows. Run 012
-reached 20/100 raw and 27/100 after repair, so Run 010 and the 35/100 cascade
-remain the verified best systems. Automated tests now total 38 passing.
+Run 013 trained Qwen2.5-Coder-3B with 4-bit QLoRA on the official filtered BIRD
+rows. It reached 28/100 raw and 34/100 after repair. Used as the primary model
+with the previous cascade as an execution-only fallback, it established a new
+project best of 36/100 with 98/100 predictions executable.
 
 The latest full benchmark and interpretation are documented in
-[Eval 016](docs/eval-016-filtered-bird-training.md).
+[Eval 017](docs/eval-017-qwen-3b-run-013.md).
 
 Done so far:
 
@@ -87,6 +88,8 @@ Done so far:
 47. Added Windows-compatible NF4 QLoRA support and passed a 3B training smoke test.
 48. Evaluated the quantized 3B base model at 22/100 raw and 27/100 repaired.
 49. Made 3B training length-safe after a step-37 memory failure; 40 tests pass.
+50. Trained Run 013 and reached 34/100 with repair and 36/100 by safe cascade.
+51. Added leakage-safe SQLite value retrieval; 46 automated tests pass.
 
 Latest high-level result:
 
@@ -131,10 +134,16 @@ Run 012 raw execution matches:     20/100
 Run 012 + repair matches:          27/100
 Three-model cascade matches:       35/100
 Three-model cascade SQL executed:  96/100
+Run 013 raw execution matches:     28/100
+Run 013 + repair matches:          34/100
+Run 013-led cascade matches:       36/100
+Run 013-led cascade SQL executed:  98/100
 ```
 
-The training pipeline works. Run 009 is the best raw model at 5/20, while Run
-004 plus repair remains the best overall system at 7/20.
+The earlier 20-question experiments established the repair pipeline. The
+current authoritative comparison is the fixed 100-question benchmark, where
+Run 013 is the strongest single repaired model at 34/100 and its execution-only
+fallback cascade is best overall at 36/100.
 Run 005 was a useful negative result: asking the model to emit ownership notes
 before SQL made generation less stable. A conservative alias-repair pass made
 more Run 004 predictions executable, but did not improve execution matches. A
@@ -592,19 +601,20 @@ docs/eval-015-lora-run-010.md
 docs/filtered-bird-training-pivot.md
 docs/eval-016-filtered-bird-training.md
 docs/qwen-3b-qlora-readiness.md
+docs/eval-017-qwen-3b-run-013.md
+docs/value-retrieval-v1.md
 ```
 
 ## Next Step
 
-The repair experiments are complete for the currently justified mechanical
-rules. They made many more predictions executable, but the full benchmark shows
-that semantic reasoning is now the larger bottleneck:
+Run 013 and the repair pipeline now make almost every cascade prediction
+executable, but the full benchmark shows that semantic reasoning is the larger
+bottleneck:
 
 ```text
-57/100 cascade predictions execute but return the wrong rows
-5/100 put a real column on the wrong table
-2/100 contain an ambiguous or unqualified column
-1/100 has another execution error
+36/100 cascade predictions return the correct rows
+62/100 execute but return the wrong rows
+2/100 still fail to execute
 ```
 
 The project milestone remains:
@@ -613,10 +623,9 @@ The project milestone remains:
 at least 50/100 execution matches after repair
 ```
 
-Runs 011 and 012 completed the diverse-data experiment using 6,601 curated BIRD
-training rows with database-disjoint validation and zero exact mini-dev question
-overlap. Relationship-aligned continuation improved Run 012 to 27/100 after
-repair, but it did not beat the existing best adapters or the 35/100 cascade.
-The next justified experiment needs more than additional 1.5B steps: use a
-stronger 3B QLoRA model with database-value retrieval, or train a selector on a
-separate validation set. See [Eval 016](docs/eval-016-filtered-bird-training.md).
+Run 013 completed the stronger 3B QLoRA experiment and improved the project
+best to 36/100. The active experiment adds leakage-safe database-value hints to
+the same 3B adapter. If retrieval does not improve execution accuracy, the next
+step is to align training prompts with value hints or train a selector on a
+separate validation set. See [Eval 017](docs/eval-017-qwen-3b-run-013.md) and
+[Value Retrieval V1](docs/value-retrieval-v1.md).
