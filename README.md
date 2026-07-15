@@ -19,20 +19,19 @@ database schema + question + evidence -> SQL query
 Current verified snapshot (2026-07-14):
 
 ```text
-Best raw adapter:                  LoRA Run 013 (Qwen 3B)
-Run 013 raw execution accuracy:   28/100
-Best single-adapter + repair:     Run 013 at 34/100
-Best execution-fallback cascade:  36/100
-Cascade SQL executable:           98/100
-Automated tests:                  46 passing
+Best raw configuration:            Run 013 + values at 29/100
+Best single configuration + repair: Run 013 + values at 35/100
+Best execution-fallback cascade:    39/100
+Cascade SQL executable:             99/100
+Automated tests:                    48 passing
 Default branch:                   main
 Current direction:                database-value retrieval
 ```
 
 Run 013 trained Qwen2.5-Coder-3B with 4-bit QLoRA on the official filtered BIRD
-rows. It reached 28/100 raw and 34/100 after repair. Used as the primary model
-with the previous cascade as an execution-only fallback, it established a new
-project best of 36/100 with 98/100 predictions executable.
+rows. Database-value retrieval raised it to 29/100 raw and 35/100 after repair.
+With execution-only fallbacks, it established a new project best of 39/100 with
+99/100 predictions executable.
 
 The latest full benchmark and interpretation are documented in
 [Eval 017](docs/eval-017-qwen-3b-run-013.md).
@@ -90,6 +89,8 @@ Done so far:
 49. Made 3B training length-safe after a step-37 memory failure; 40 tests pass.
 50. Trained Run 013 and reached 34/100 with repair and 36/100 by safe cascade.
 51. Added leakage-safe SQLite value retrieval; 46 automated tests pass.
+52. Evaluated value retrieval and raised the project-best cascade to 39/100.
+53. Prepared value-aligned SFT V10 and passed a 3B continuation smoke test.
 
 Latest high-level result:
 
@@ -138,6 +139,10 @@ Run 013 raw execution matches:     28/100
 Run 013 + repair matches:          34/100
 Run 013-led cascade matches:       36/100
 Run 013-led cascade SQL executed:  98/100
+Run 013 + values raw matches:      29/100
+Run 013 + values + repair:         35/100
+Value-guided cascade matches:      39/100
+Value-guided cascade SQL executed: 99/100
 ```
 
 The earlier 20-question experiments established the repair pipeline. The
@@ -607,14 +612,14 @@ docs/value-retrieval-v1.md
 
 ## Next Step
 
-Run 013 and the repair pipeline now make almost every cascade prediction
+Value-guided Run 013 and the repair pipeline now make almost every cascade prediction
 executable, but the full benchmark shows that semantic reasoning is the larger
 bottleneck:
 
 ```text
-36/100 cascade predictions return the correct rows
-62/100 execute but return the wrong rows
-2/100 still fail to execute
+39/100 cascade predictions return the correct rows
+60/100 execute but return the wrong rows
+1/100 still fails to execute
 ```
 
 The project milestone remains:
@@ -623,9 +628,8 @@ The project milestone remains:
 at least 50/100 execution matches after repair
 ```
 
-Run 013 completed the stronger 3B QLoRA experiment and improved the project
-best to 36/100. The active experiment adds leakage-safe database-value hints to
-the same 3B adapter. If retrieval does not improve execution accuracy, the next
-step is to align training prompts with value hints or train a selector on a
-separate validation set. See [Eval 017](docs/eval-017-qwen-3b-run-013.md) and
-[Value Retrieval V1](docs/value-retrieval-v1.md).
+Run 013 completed the stronger 3B QLoRA experiment, and leakage-safe value
+retrieval improved the project best to 39/100. The active Run 014 experiment
+continues training on SFT V10 so the model learns how to use the new value
+context. See [Eval 017](docs/eval-017-qwen-3b-run-013.md), [Value Retrieval
+V1](docs/value-retrieval-v1.md), and [SFT V10](docs/sft-v10-value-context.md).

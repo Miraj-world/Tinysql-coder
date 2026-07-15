@@ -30,6 +30,16 @@ retrieved column/value lines:   279
 gold SQL used by retrieval:      no
 ```
 
-The next measurement is to run the same Run 013 adapter on these augmented
-prompts and compare execution accuracy against its 28/100 raw and 34/100
-repaired scores.
+## Measured Result
+
+| System | Execution matches | SQL executed |
+|---|---:|---:|
+| Run 013 | 28/100 | 75/100 |
+| Run 013 + repair | 34/100 | 90/100 |
+| Run 013 + retrieved values | 29/100 | 76/100 |
+| Run 013 + retrieved values + repair | **35/100** | 89/100 |
+| Value-guided Run 013 with execution-only fallbacks | **39/100** | **99/100** |
+
+Retrieval provides a small direct improvement and complementary predictions
+that make the safe cascade three points better. V10 now tests whether training
+the adapter to understand the value-context section can increase that gain.

@@ -88,3 +88,4 @@ the project; later entries supersede them rather than rewriting the history.
 | 2026-07-14 | Qwen 3B QLoRA Readiness and Length-Safety Correction | [qwen-3b-qlora-readiness.md](qwen-3b-qlora-readiness.md) |
 | 2026-07-14 | Qwen 3B Run 013 Eval 017 | [eval-017-qwen-3b-run-013.md](eval-017-qwen-3b-run-013.md) |
 | 2026-07-14 | Database Value Retrieval V1 | [value-retrieval-v1.md](value-retrieval-v1.md) |
+| 2026-07-14 | SFT V10 Value-Context Alignment | [sft-v10-value-context.md](sft-v10-value-context.md) |
